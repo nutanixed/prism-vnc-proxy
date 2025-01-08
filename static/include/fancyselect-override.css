@@ -1,0 +1,144 @@
+div.fancy-select {
+  font-weight: 400;
+  text-transform: none;
+  font-size: 13px;
+  color: #555;
+  display: inline-block;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+div.fancy-select.overflowing ul.options,
+div.fancy-select.overflowing ul.options.open {
+  top: auto;
+  bottom: 0px;
+}
+div.fancy-select select:focus + div.trigger:not(.open) {
+  border: #26bbf0 solid 1px;
+  -webkit-box-shadow: 0 0 2px #26bbf0;
+  -moz-box-shadow: 0 0 2px #26bbf0;
+  box-shadow: 0 0 2px #26bbf0;
+}
+div.fancy-select div.trigger {
+  padding: 4px 27px 4px 13px;
+  background: transparent;
+  color: #fff;
+  border: none;
+  border-radius: 0px;
+  border-right: 1px solid #888;
+  box-shadow: none;
+  width: auto;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  -webkit-transition: none;
+  -moz-transition: none;
+  -ms-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+div.fancy-select div.trigger::before,
+div.fancy-select div.trigger::after {
+  content: '';
+  display: block;
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 3px solid transparent;
+  right: 9px;
+}
+div.fancy-select div.trigger::before {
+  border-bottom: 4px solid #6f787e;
+  top: 5px;
+}
+div.fancy-select div.trigger::after {
+  border-top: none;
+  border-top: 4px solid #6f787e;
+  top: 14px;
+}
+div.fancy-select div.trigger.open {
+  border: none;
+  color: #6f787e;
+}
+div.fancy-select div.trigger.open:after {
+  border-top-color: #6f787e;
+}
+div.fancy-select.n-select-options-align-right ul.options {
+  left: auto;
+  right: 0;
+}
+div.fancy-select ul.options {
+  top: 0px;
+  padding-left: 0;
+  background: #fff;
+  border-radius: 5px;
+  border: 1px solid #c0c9cf;
+  box-shadow: 0px 2px 3px 0px rgba(0, 0, 0, 0.15);
+  min-width: 0;
+  width: auto;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  -webkit-transition: none;
+  -moz-transition: none;
+  -ms-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+div.fancy-select ul.options.open {
+  top: 0px;
+  -webkit-transition: none;
+  -moz-transition: none;
+  -ms-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+div.fancy-select ul.options.overflowing {
+  -webkit-transition: none;
+  -moz-transition: none;
+  -ms-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+div.fancy-select ul.options.overflowing.open {
+  bottom: 0px;
+  -webkit-transition: none;
+  -moz-transition: none;
+  -ms-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+div.fancy-select ul.options li {
+  padding: 3px 27px 3px 26px;
+  margin: 2px 0 1px;
+  color: #555;
+  -webkit-transition: none;
+  -moz-transition: none;
+  -ms-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+div.fancy-select ul.options li:last-child {
+  margin-bottom: 2px;
+}
+div.fancy-select ul.options li.selected {
+  background: inherit;
+  color: #555;
+}
+div.fancy-select ul.options li.selected::before {
+  content: 'J';
+  font-size: 8px;
+  display: inline-block;
+  position: absolute;
+  font-family: ss-nutanix;
+  left: 10px;
+  margin-top: 3px;
+}
+div.fancy-select ul.options li.hover {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  background: #26bbf0;
+  border-top: 1px solid #11a3d7;
+  border-bottom: 1px solid #11a3d7;
+  color: #fff;
+}
