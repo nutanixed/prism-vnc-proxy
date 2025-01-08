@@ -35,23 +35,28 @@
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="include/base.css" title="plain">
-    <link rel="stylesheet" href="include/jquery-ui-1.8.24.custom.css"
+    <link rel="stylesheet" href="../jquery-ui-1.13.3/jquery-ui.css"
           title="plain">
     <link rel="stylesheet" href="include/override-base.css" title="plain">
     <link rel="stylesheet" href="include/fancySelect.css" title="plain">
     <link rel="stylesheet" href="include/fancyselect-override.css"
           title="plain">
-    <script src="include/jquery-1.7.1.min.js"></script>
-    <script src="include/jquery-ui-1.8.24.custom.min.js"></script>
+    <script src="../jquery-3.5.1/jquery-3.5.1.js"></script>
+    <script src="../jquery-ui-1.13.3/jquery-ui.js"></script>
     <script src="include/fancySelect.js"></script>
   </head>
 
-  <body class="hello" style="margin: 0px;">
+  <body style="margin: 0px;">
     <div id="noVNC_screen">
       <div id="noVNC_status_bar"
            class="noVNC_status_bar"
            style="margin-top: 0px; max-height: 48px">
         <div id="noVNC_buttons">
+          <div id="action-mount-iso"
+            class="button"
+            title="Mount ISO">
+            Mount ISO
+          </div>
           <div class="kbd-lang"
                title="Select keyboard language layout">
             <div class="kbd-icon">
@@ -118,6 +123,40 @@
         </div>
         <div id="noVNC_status" style="position: relative; height: auto;">
           Loading
+        </div>
+        <a class='action-link' style="display:none;">
+          Update Console
+        </a>
+        <div id="dialog-mount-disk"
+          title="Mount Disk Image"
+          style="display:none;">
+          <div class="msg">Fetching available images...</div>
+          <div class="content">
+            <p class="description">
+              Select the desired ISO along with the CD-ROM drive you wish to
+              mount it to. Please note, any ISO currently attached to the
+              selected drive will be ejected and replaced by your selection.
+            </p>
+            <form>
+              <div class="form-control">
+                <label for="select-image">ISO File</label>
+                <div class="select-wrapper">
+                  <select id="select-image"
+                    class="browser-select">
+                  </select>
+                </div>
+              </div>
+              <div class="form-control">
+                <label for="select-cdrom">CD-ROM Drive</label>
+                <div class="select-wrapper">
+                  <select id="select-cdrom"
+                    name="select-cdrom"
+                    class="browser-select">
+                  </select>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
         <div id="dialog-form" title="Power off/Reset VM"
              style="display:none;">
