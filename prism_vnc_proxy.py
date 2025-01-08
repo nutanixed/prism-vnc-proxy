@@ -148,6 +148,15 @@ def main():
   web.run_app(app, host=opts.bind_address, port=opts.bind_port)
   return 0
 
+def assert_minimum_python_version():
+  assert sys.version_info[:2] >= (3, 9), "Requires Python 3.9 or later"
+  print("Running Python %s" % (sys.version,))
+
+def assert_virtualenv():
+  assert "VIRTUAL_ENV" in os.environ, "Not running inside a virtual environment"
+  print("Running inside a python virtual environment")
+
 if __name__ == "__main__":
-  import sys
+  assert_minimum_python_version()
+  assert_virtualenv()
   sys.exit(main())
