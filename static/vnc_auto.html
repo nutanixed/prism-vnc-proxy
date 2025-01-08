@@ -52,11 +52,12 @@
            class="noVNC_status_bar"
            style="margin-top: 0px; max-height: 48px">
         <div id="noVNC_buttons">
-          <div id="action-mount-iso"
+          <!-- Nutanix/JonK: remove mounting from standalone mode  -->
+          <!-- <div id="action-mount-iso"
             class="button"
             title="Mount ISO">
             Mount ISO
-          </div>
+          </div> -->
           <div class="kbd-lang"
                title="Select keyboard language layout">
             <div class="kbd-icon">
@@ -124,7 +125,8 @@
         <div id="noVNC_status" style="position: relative; height: auto;">
           Loading
         </div>
-        <a class='action-link' style="display:none;">
+        <!-- Nutanix/JonK: remove mounting from standalone mode  -->
+        <!-- <a class='action-link' style="display:none;">
           Update Console
         </a>
         <div id="dialog-mount-disk"
@@ -157,7 +159,7 @@
               </div>
             </form>
           </div>
-        </div>
+        </div> -->
         <div id="dialog-form" title="Power off/Reset VM"
              style="display:none;">
           <form>
