@@ -1,17 +1,47 @@
-#!/usr/bin/env python
-#
-# Copyright (c) 2015 Nutanix Inc. All rights reserved.
-#
-# Author: gasmith@nutanix.com
-#
+#!/usr/bin/env python3
 
-try:
-  import env
-except ImportError:
-  pass
+"""
+prism_vnc_proxy.py
 
-import gevent.monkey
-gevent.monkey.patch_all()
+This module implements a small HTTP proxy and frontend for VM VNC websockets.
+It uses aiohttp to run an HTTP server that proxies websocket traffic through
+a Prism gateway and provides a frontend UI for Acropolis VM VNC websockets.
+
+Classes:
+  WSGIPrismWebsocketProxy: Handles websocket proxying to the Prism gateway.
+
+Functions:
+  parse_opts(): Parses command line options and returns an optparse options object.
+  main(): Main entry point for the VNC proxy server. Configures the WebSocket proxy
+      for VNC connections and starts an HTTP server using aiohttp.
+  
+Usage:
+  Run this script with the required command-line arguments to start the VNC proxy server.
+  Example:
+    python prism_vnc_proxy.py --prism_hostname=<hostname> --prism_password=<password> [options]
+  
+Command-line Options:
+  --bind_address: Address to bind the HTTP server to (default: "").
+  --bind_port: Port to bind the HTTP server to (default: 8080).
+  --prism_hostname: Hostname of the Prism gateway.
+  --prism_username: Username for the Prism gateway (default: "admin").
+  --prism_password: Password for the Prism gateway.
+
+Endpoints:
+  /proxy/$vm_uuid: Proxies websocket traffic to the VNC server for the specified VM UUID.
+  /console/vnc_auto.html?path=proxy/$vm_uuid&name=$name: Provides a frontend UI for the VNC websocket.
+
+Logging:
+  Logs information and errors to the console using the logging module.
+
+Author:
+    Jon Kohler (jon@nutanix.com)
+
+Copyright:
+    (c) 2025 Nutanix Inc. All rights reserved.
+"""
+
+from aiohttp import web
 
 import inspect
 import logging
@@ -20,10 +50,10 @@ import os
 import socket
 import sys
 
-from wsgi_file_handler import WSGIFileHandler
-from wsgi_http_handler import WSGIHttpHandler
+from wsgi_file_handler import wsgi_file_handler
 from wsgi_prism_websocket_proxy import WSGIPrismWebsocketProxy
 
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 def parse_opts():
@@ -44,7 +74,7 @@ def parse_opts():
       frontend UI for Acropolis VM VNC websockets in particular.
 
       The VNC websocket proxy can be accessed directly via the following URL,
-      where $vm_uuid is a hex-formatted UUID. The websocket will only be
+      where $vm_uuid is a hex-formatted UUID4. The websocket will only be
       responsive if the corresponding VM is up and running.
 
         /proxy/$vm_uuid
@@ -65,9 +95,6 @@ def parse_opts():
       "--prism_username", dest="prism_username", default="admin")
   p.add_option(
       "--prism_password", dest="prism_password")
-  p.add_option(
-      "--docroot", dest="docroot",
-      default=os.path.join(os.path.dirname(__file__), "static"))
 
   opts, args = p.parse_args()
 
@@ -84,80 +111,43 @@ def parse_opts():
 
   return opts
 
-def run_server(server_address, handler, timeout=None, enable_ipv6=False,
-               allow_reuse_address=True, max_size=50):
-  """
-  Creates a gevent WSGI server and runs it forever.
-
-  Args:
-    server_address ((str, int)): Server address and port.
-    handler (callable): Handle function called when an HTTP request is
-        processed.
-    timeout (int): Socket timeout.
-    enable_ipv6 (bool): Whether to enable IPv6.
-    allow_reuse_address (bool): Allow kernel to reuse local socket.
-    max_size (int): Maximum number of client connections that can be opened by
-        the server at a particular point in time.
-  """
-  from gevent.pywsgi import WSGIServer, WSGIHandler
-
-  # Disable Nagle on accepted sockets.
-  class WsgiSocket(socket.socket):
-    def accept(self):
-      ret = socket.socket.accept(self)
-      ret[0].setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-      return ret
-
-  # Enable keepalive.
-  class handler_class(WSGIHandler):
-    def __init__(self, *args, **kwargs):
-      WSGIHandler.__init__(self, *args, **kwargs)
-      self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-
-  family = socket.AF_INET6 if enable_ipv6 else socket.AF_INET
-  sock = WsgiSocket(family, socket.SOCK_STREAM)
-  sock.setsockopt(
-      socket.SOL_SOCKET, socket.SO_REUSEADDR, int(bool(allow_reuse_address)))
-  sock.settimeout(timeout)
-  sock.bind(server_address)
-  sock.listen(max_size)
-  server = WSGIServer(sock, handler, log=open(os.devnull, "w+"),
-                      spawn=max_size or "default", handler_class=handler_class)
-  server.serve_forever()
-
 def main():
   """
-  Main entry point.
-
-  Runs an HTTP server that serves static content and the websocket proxy.
-
+  Main entry point for the VNC proxy server.
+  
+  This function parses command-line options, configures the WebSocket proxy
+  for VNC connections, and starts an HTTP server using aiohttp. The server
+  serves static content and proxies WebSocket connections to the VNC server.
+  The server listens on the address and port specified by the command-line
+  options.
+  
   Returns:
-    int: Status code.
+    int: Status code. Returns 1 if options parsing fails, otherwise 0.
   """
   opts = parse_opts()
   if opts is None:
     return 1
 
-  http_handler = WSGIHttpHandler()
-
-  # Add a handler for static content (HTML, js, css, &c.).
-  WSGIFileHandler(http_handler).add_handle("/console", opts.docroot)
-
   # Configure the prism websocket handler. Local requests to /proxy/<vm_uuid>
   # are proxied to $prism/vnc/vm/<vm_uuid>/proxy.
-  WSGIPrismWebsocketProxy(
-      http_handler,
-      opts.prism_hostname,
-      opts.prism_username,
-      opts.prism_password).add_handler(
-          "/proxy/<vm_uuid>",
-          lambda vm_uuid: "/vnc/vm/%s/proxy" % (vm_uuid,))
+  proxy_obj = WSGIPrismWebsocketProxy(
+    opts.prism_hostname,
+    opts.prism_username,
+    opts.prism_password)
 
-  # Run the server forever.
-  run_server((opts.bind_address, opts.bind_port), http_handler.handle)
+  # Define the aiohttp app server.
+  app = web.Application()
+  
+  # Add the file handler for serving static content.
+  app.router.add_get('/console/{file_path:.*}', wsgi_file_handler)
+  
+  # Add the websocket handler for the VNC proxy.
+  app.add_routes([web.get('/proxy/{vm_uuid}', proxy_obj.prism_websocket_handler)])
+
+  log.info("Starting aiohttp server")
+  web.run_app(app, host=opts.bind_address, port=opts.bind_port)
   return 0
 
 if __name__ == "__main__":
   import sys
-  logging.basicConfig(level=logging.INFO)
   sys.exit(main())

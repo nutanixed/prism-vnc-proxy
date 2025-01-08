@@ -1,1 +1,102 @@
-# prism-vnc-proxy
+# Prism VNC Proxy
+
+This project provides a small HTTP proxy and frontend for VM VNC WebSockets. It uses `aiohttp` to run an HTTP server that proxies WebSocket traffic through a Prism gateway and provides a frontend UI for Acropolis VM VNC WebSockets.
+
+## Features
+- Proxies WebSocket traffic to the VNC server for specified VM UUIDs.
+- Provides a frontend UI for VNC WebSockets.
+- Handles authentication with Prism and establishes WebSocket connections between clients and the Prism server.
+- Serves static content.
+
+## Setup Python Environment
+
+### Preparing the Environment
+Please use virtual environments to ensure that you're operating in a clean Python environment and do not have conflicts with system-installed Python packages.
+
+Reference: [Python Packaging User Guide](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/)
+
+### Setup Virtual Environment
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### Install Project Requirements
+```sh
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
+## Usage
+
+### Run the Proxy
+The proxy can be run from Python like so:
+```sh
+python3 prism_vnc_proxy.py --prism_hostname=1.2.3.4 --prism_password=PutThePasswordHere --bind_port=8098
+```
+
+### Command-line Options
+- `--bind_address`: Address to bind the HTTP server to (default: "").
+- `--bind_port`: Port to bind the HTTP server to (default: 8080).
+- `--prism_hostname`: Hostname of the Prism gateway.
+- `--prism_username`: Username for the Prism gateway (default: "admin").
+- `--prism_password`: Password for the Prism gateway.
+
+### Endpoints
+- `/proxy/$vm_uuid`: Proxies WebSocket traffic to the VNC server for the specified VM UUID.
+- `/console/vnc_auto.html?path=proxy/$vm_uuid&name=$name`: Provides a frontend UI for the VNC WebSocket.
+
+## Validate Proxy is Running
+You can check if the proxy is running (crudely) with `netstat` like so:
+```sh
+sudo netstat -an | grep <bind_port>
+```
+Example:
+```sh
+$ sudo netstat -an | grep 8098
+tcp        0      0 0.0.0.0:8098            0.0.0.0:*               LISTEN
+```
+
+### Access Resources
+Access the VNC UI via the following URL scheme:
+```
+http://<proxy-host>:<bind_port>/console/vnc_auto.html?path=proxy/<vm_uuid>&name=<vm_name>
+```
+
+## Development
+
+### Logging
+Logs information and errors to the console using the `logging` module.
+
+### Troubleshooting
+If you encounter issues while running the proxy, consider the following steps:
+1. **Check Logs**: Review the console logs for any error messages or warnings.
+2. **Validate Configuration**: Ensure that the command-line options are correctly specified.
+3. **Network Issues**: Verify network connectivity between the proxy server and the Prism gateway.
+4. **Dependencies**: Ensure all required Python packages are installed and up-to-date.
+
+### File Structure
+- `prism_vnc_proxy.py`: Main entry point for the VNC proxy server.
+- `wsgi_prism_websocket_proxy.py`: Handles WebSocket proxying to the Prism gateway.
+- `wsgi_file_handler.py`: Asynchronous file handler for serving static files.
+- `wsgi_http_handler.py`: Asynchronous HTTP handler that adapts a WSGI application to be used with `aiohttp`.
+
+## Contributing
+We welcome contributions to improve the Prism VNC Proxy. Please follow these guidelines:
+1. Fork the repository and create a new branch for your feature or bugfix.
+2. Write clear, concise commit messages.
+3. Ensure your code adheres to the project's coding standards.
+4. Submit a pull request with a detailed description of your changes.
+
+## TODOs
+- Tested on Rocky 9 + Python 3.9, but need to target 3.10++.
+- Should provide fixed versions of `requirements.txt`?
+- Should do linting, `pyflake`, etc.
+- GitHub Actions runner for unit tests, etc.
+- Legal review for licensing and distribution.
+- Move `noVNC` to a submodule?
+- At leaast rebase `noVNC` to latest to flush out any private diffs
+- Drop http handler as it is actually unused
+- Cleanup demo code (and perhaps move it to its own public repo?)
+
+For more detailed information, please refer to the source code and comments within the files.
