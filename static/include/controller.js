@@ -457,7 +457,8 @@
     this.targetEl = options.targetEl;
     this.onUpdateState = options.onUpdateState;
     this.skipVncHandshake = options.skipVncHandshake;
-
+    options.internalMode = true;
+    
     this.keymaps = global.scancode_mapper.list();
   };
 
@@ -583,6 +584,7 @@
     this.runKbdSupportTest();
 
     var options = this.getQueryParamOptions();
+    options.internalMode = true;
     if ((options.hypervisorType && options.vmName &&
          options.controllerVm) || options.internalMode) {
       this.startConsoleSession(options);
