@@ -1,119 +1,97 @@
+#!/usr/bin/env python3
 #
-# Copyright (c) 2014 Nutanix Inc. All rights reserved.
+# Copyright (c) 2025 Nutanix Inc. All rights reserved.
 #
-# Author: robert@nutanix.com
+# Author: jon@nutanix.com
 #
-# Module defines a WSGI handler object that can be passed to a WSGI server
-# instance.
-#
-# Example(eventlet WSGI server):
-#   # Create handler.
-#   wsgi_handler = WSGIHttpHandler(..)
-#
-#   # Add function handlers.
-#   wsgi_handler.add_wsgi_handler(func, url)
-#
-#   eventlet.server(sock, wsgi_handler.handle)
 
+from aiohttp import web
 import logging
-import os
-import re
-import select
-import threading
-import time
-import traceback
 
-from werkzeug.exceptions import HTTPException
-from werkzeug.routing import Map, Rule
+logger = logging.getLogger(__name__)
 
-log = logging.getLogger(__name__)
-
-class WSGIHttpHandler(object):
-
-  @staticmethod
-  def default_response_headers(content_type="text/plain"):
+class WSGIHttpHandler:
     """
-    Useful method for filling in default headers for responses. Returns a list
-    of tuples: (Header name, Header value).
+    WSGIHttpHandler is an asynchronous HTTP handler that adapts a WSGI
+    application to be used with aiohttp.
 
-    Returns:
-      List of tuples [(str, str)]
+    Attributes:
+        wsgi_app (callable): The WSGI application to be handled.
+
+    Methods:
+        __init__(wsgi_app):
+            Initializes the WSGIHttpHandler with the given WSGI application.
+
+        __call__(request):
+            Asynchronously handles an incoming HTTP request, converts it to
+            a WSGI environment, calls the WSGI application, and writes the
+            response back to the client.
+
+        _create_environ(request):
+            Creates a WSGI environment dictionary from the aiohttp request.
+
+        _start_response(response):
+            Returns a start_response callable that sets the status and header
+            on the aiohttp response.
     """
-    time_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
-    headers = [
-      ("Content-type", content_type),
-      ("Cache-control", "no-cache"),
-      ("Expires", time_str)
-    ]
-    return headers
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app 
 
-  def __init__(self):
-    self.__url_map = Map()
+    async def __call__(self, request):
+        try:
+            logger.info(f"Handling request: {request.method} {request.path}")
+            environ = self._create_environ(request)
+            response = web.StreamResponse()
+            result = self.wsgi_app(environ, self._start_response(response))
+            await response.prepare(request)
+            if isinstance(result, list):
+                for data in result:
+                    await response.write(data)
+            else:
+                async for data in result:
+                    await response.write(data)
+            await response.write_eof()
+            logger.info(f"Finished handling request: {request.method} {request.path}")
+            return response
+        except Exception as e:
+            logger.error(f"Error handling request: {e}")
+            return web.Response(status=500, text="Internal Server Error")
 
-  def add_wsgi_handler(self, handler, url, method):
-    """
-    Method that registers a WSGI handler function for a particular URL.
+    def _create_environ(self, request):
+        try:
+            environ = {
+                'REQUEST_METHOD': request.method,
+                'SCRIPT_NAME': '',
+                'PATH_INFO': request.path,
+                'QUERY_STRING': request.query_string,
+                'CONTENT_TYPE': request.content_type,
+                'CONTENT_LENGTH': request.content_length,
+                'SERVER_NAME': request.host.split(':')[0],
+                'SERVER_PORT': request.host.split(':')[1] if ':' in request.host else '80',
+                'SERVER_PROTOCOL': request.version,
+                'wsgi.version': (1, 0),
+                'wsgi.url_scheme': request.scheme,
+                'wsgi.input': request.content,
+                'wsgi.errors': request.app.logger,
+                'wsgi.multithread': False,
+                'wsgi.multiprocess': False,
+                'wsgi.run_once': False,
+            }
+            logger.debug(f"Created WSGI environ: {environ}")
+            return environ
+        except Exception as e:
+            logger.error(f"Error creating WSGI environ: {e}")
+            raise
 
-    Args:
-      handler(func): Function that will handle the WSGI request.
-      url (str): URL to handle.
-      methods(str): HTTP method.
-    """
-    rule = Rule(url, methods=[ method ], endpoint=handler)
-    self.__url_map.add(rule)
-
-  def __send_error(self, log_level, log_msg, http_error_status,
-                   start_response):
-    """
-    Helper for writing a log messaging and returning an HTTP error status back
-    to the client.
-    """
-    log_level(log_msg)
-    return self.__send_response(start_response, http_error_status, [], log_msg)
-
-  def __send_response(self, start_response, status, headers, body):
-    """
-    Sends a response back to the client.
-    """
-    start_response(str(status), headers)
-    return [ body ]
-
-  def handle(self, environ, start_response):
-    """
-    Entry point for all HTTP requests. This function will forward the request
-    to the appropriate handler.
-    """
-    # Wrap each start_response with a check to make sure that if we are trying
-    # upgrade a connection, we always issue a connection close after we are
-    # finished. The reason for this is if we do not issue a connection close
-    # and we mistakenly go into a handler that does not properly handle the
-    # connection the client may keep the connection open.
-    def start_response_wrapper(http_status, headers):
-      connection_req_parts = re.split(r",\s*",
-                                      environ.get("HTTP_CONNECTION", ""))
-      connection_req_parts = map(lambda conn_param: conn_param.lower(),
-                                 connection_req_parts)
-
-      if "upgrade" in connection_req_parts:
-        resp_headers = dict([ (header_name.lower(), header_value.lower())
-                              for header_name, header_value in headers ])
-        if "connection" not in resp_headers:
-          resp_headers["connection"] = "close"
-        elif not re.search(r"close", resp_headers["connection"]):
-          resp_headers["connection"] += ", close"
-
-        headers = [ (header_name, header_value)
-                    for header_name, header_value in resp_headers.iteritems() ]
-      start_response(http_status, headers)
-
-    adapter = self.__url_map.bind_to_environ(environ)
-    try:
-      endpoint, args = adapter.match()
-    except HTTPException as ex:
-      return ex(environ, start_response_wrapper)
-
-    try:
-      return endpoint(environ, start_response_wrapper, **args)
-    except Exception:
-      log.error("".join(traceback.format_exc()))
-      raise
+    def _start_response(self, response):
+        def start_response(status, response_headers, exc_info=None):
+            try:
+                logger.info(f"Starting response with status: {status}")
+                response.set_status(int(status.split()[0]))
+                for header in response_headers:
+                    response.headers[header[0]] = header[1]
+                logger.debug(f"Response headers set: {response_headers}")
+            except Exception as e:
+                logger.error(f"Error in start_response: {e}")
+                raise
+        return start_response
