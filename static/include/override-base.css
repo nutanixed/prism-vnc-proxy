@@ -48,18 +48,23 @@
   font-style: normal;
 }
 
-body {
-  background: #c9cfd4;
+body,
+.ui-widget,
+.ui-widget button,
+.ui-widget select {
   font-family: 'ProximaNovaSoft', Helvetica Neue, Helvetica, Arial, sans-serif;
   font-weight: 400;
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
   -moz-font-smoothing: antialiased;
   -o-font-smoothing: antialiased;
-  font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   -webkit-text-size-adjust: 100%;
   font-size: 14px;
+}
+
+body {
+  background: #c9cfd4;
   margin: 0;
   display: table;
   width: 100%;
@@ -94,7 +99,7 @@ body {
   font-size: 13px;
   float: none !important;
   display: inline-block;
-  width: 60%;
+  width: 50%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -152,10 +157,26 @@ body {
   border-right: 1px solid #888;
   padding: 1px 10px;
   font-size: 14px;
-  cursor: pointer !important;
+  font-weight: 500;
+  cursor: pointer;
   vertical-align: top;
+  box-sizing: border-box;
+  height: 100%;
+  line-height: 26px;
 }
 
+#noVNC_buttons .button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+#noVNC_buttons .button:last-child {
+  border-right: none;
+  border-radius: 0 5px 5px 0;
+}
+
+#noVNC_buttons .button.disabled {
+  color: #bbb;
+}
 #noVNC_buttons .button.disabled svg {
   fill: #bbb;
 }
@@ -166,6 +187,7 @@ body {
 
 #noVNC_buttons .button.disabled:hover {
   background: none;
+  cursor: not-allowed;
 }
 
 #noVNC_buttons input[type="button"][disabled] {
@@ -183,6 +205,66 @@ body {
   #noVNC_status_bar {
     background-image: none;
   }
+}
+
+/* Inputs */
+.select-wrapper {
+  position: relative;
+}
+
+.select-wrapper::before {
+  content: 'z';
+  font-family: ss-nutanix;
+  font-size: 6px;
+  line-height: 2px;
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  width: 6px;
+  height: 4px;
+  border: none;
+}
+
+.select-wrapper.disabled {
+  color: #7C8D9F;
+  border-color: #B8BFCA;
+  background-color: #F2F4F6;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select-wrapper.disabled > .browser-select {
+  pointer-events: none;
+}
+
+.select-wrapper > .browser-select {
+  width: 100%;
+  height: 30px;
+  background: white;
+  border: solid 1px #B8BFCA;
+  border-radius: 4px;
+  background-color: transparent;
+  padding: 0 25px 0 9px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+}
+
+.select-wrapper > .browser-select::-ms-expand {
+  /* Hide the caret in IE */
+  display: none;
+}
+
+/* Forms */
+.form-control {
+  margin-bottom: 10px;
+}
+
+.form-control > label {
+  color: #627386;
+  font-size: 12px;
 }
 
 /* jquery UI dialog */
@@ -260,6 +342,14 @@ body.mode_attached {
 body.mode_attached #noVNC_status_bar {
   background: none;
 }
+body.mode_attached .action-link,
+body.mode_attached .action-link:visited {
+  color: #627386;
+}
+body.mode_attached .action-link:hover,
+body.mode_attached .action-link:active {
+  color: #22272E;
+}
 body.mode_attached #noVNC_status_bar #noVNC_status {
   color: #6f787e;
 }
@@ -330,6 +420,8 @@ body.mode_attached #noVNC_buttons .button.disabled:hover svg {
 ::-webkit-scrollbar-thumb:window-inactive {
   background:rgba(255,255,255,0.8);
 }
-#powerOffActionsButton{display:none !important}
-#vm_screenshot{display:none !important}
-#sendCtrlAltDelButton{border-right:none !important}
+
+body.mode_attached,
+body.mode_attached #noVNC_status_bar {
+  background: none;
+}
