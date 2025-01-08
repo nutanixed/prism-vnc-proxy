@@ -11,7 +11,7 @@ This project provides a small HTTP proxy and frontend for VM VNC WebSockets. It 
 ## Setup Python Environment
 
 ### Preparing the Environment
-Please use virtual environments to ensure that you're operating in a clean Python environment and do not have conflicts with system-installed Python packages.
+This project will only execute within a python virtual environment (venv), which helps ensure that you're operating in a clean Python environment and do not have conflicts with system-installed Python packages.
 
 Reference: [Python Packaging User Guide](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/)
 
@@ -89,7 +89,6 @@ We welcome contributions to improve the Prism VNC Proxy. Please follow these gui
 4. Submit a pull request with a detailed description of your changes.
 
 ## TODOs
-- Tested on Rocky 9 + Python 3.9, but need to target 3.10++.
 - Should provide fixed versions of `requirements.txt`?
 - Should do linting, `pyflake`, etc.
 - GitHub Actions runner for unit tests, etc.
