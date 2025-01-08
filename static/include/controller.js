@@ -45,6 +45,21 @@
       ESX: 'kVMware',
       XEN: 'kXen'
     },
+    TASK_STATUS: {
+      V2: {
+        SUCCESS: 'succeeded',
+        FAIL: 'failed'
+      }
+    },
+    // Rendering the view within the Prism UI.
+    MODE_ATTACHED: 'attached',
+    // Rendering the view in it's own browser window.
+    MODE_DETACHED: 'detached',
+    // Console feature IDs. These can be used to toggle support for a particular
+    // feature if it is not universally supported.
+    FEAT: {
+      MOUNT_ISO: 'mount_iso'
+    },
     // noVNC console states
     CONSOLE_STATE: {
       NORMAL        : 'normal',
@@ -52,6 +67,13 @@
       DISCONNECTED  : 'disconnected',
       FATAL         : 'fatal',
       LOADED        : 'loaded'
+    },
+    // Host environment of vm
+    HOST_ENV: {
+      PE: 'pe',
+      PC: 'pc',
+      SSP: 'ssp',
+      XI: 'xi'
     }
   };
 
@@ -87,6 +109,29 @@
       }
     },
 
+    // Get the host environment of vm
+    getHostEnv: function() {
+      if (this.getUrlParameter('uhura')) {
+        return Constants.HOST_ENV.PE;
+      } else if (this.getUrlParameter('isXi')) {
+        return Constants.HOST_ENV.XI;
+      } else if (this.getUrlParameter('noV1Access')) {
+        return Constants.HOST_ENV.SSP;
+      } else {
+        return constants.HOST_ENV.PC;
+      }
+    },
+
+    // Create URL for the react console
+    createNewConsoleURL: function() {
+      const vmId = this.getVmId();
+      const env = this.getHostEnv();
+      const mode = this.getUrlParameter('attached') === 'true'
+        ? Constants.MODE_ATTACHED
+        : Constants.MODE_DETACHED;
+      return '/console/vnc/#/vm/' + vmId + '?env=' + env + '&mode=' + mode;
+    },
+
     // Save the user selected keyboard layout to local storage
     persistKeyboardLayout: function (kbd) {
       if (global.localStorage &&
@@ -97,7 +142,8 @@
 
     // Throttle function to update ui_idle_time in localstorage
     // for mouse/keyboard events in each window time.
-    throttle: function(callback, wait, context = this) {
+    throttle: function(callback, wait, context) {
+      context = context || this;
       var timeout = null,
           previous = 0;
 
@@ -127,6 +173,86 @@
     }
   };
 
+  // Return a handler for checking the status of a v2 task.
+  var getV2TaskHandler = function(pollId, options) {
+    return function(response) {
+      var status = (response.progress_status || '').toLowerCase();
+      if (status === Constants.TASK_STATUS.V2.SUCCESS) {
+        clearInterval(pollId);
+        options.success();
+      } else if (status ===  Constants.TASK_STATUS.V2.FAILED) {
+        clearInterval(pollId);
+        options.error('Task failed to complete');
+      }
+    }
+  };
+  // Return a handler for checking the status of a v3 task.
+  var getV3TaskHandler = function() {
+    // TODO: Populate this if you want to watch a v3 task.
+  }
+
+  // Simple data model for dealing with the VM API response.
+  var VmModel = function(data) {
+    data = data || {};
+
+    return {
+      getId: function() {
+        return data.uuid;
+      },
+
+      // Return a boolean indicating if there is a CD-ROM drive currently
+      // attached to the VM.
+      hasCdrom: function() {
+        return !!this.getCdroms().length;
+      },
+
+      // Return an array of CD-ROM drives attached to the VM.
+      getCdroms: function() {
+        return this.getDisks().filter(function(disk) {
+          return disk.is_cdrom;
+        });
+      },
+
+      // Find the VM disk by it's identifier.
+      getDiskById: function(id) {
+        var disks = this.getDisks();
+        for (var i = 0; i < disks.length; i++) {
+          var disk = disks[i];
+          if (disk.disk_address.disk_label === id) {
+            return disk;
+          }
+        }
+      },
+
+      // Return and array of disks attached to the VM.
+      getDisks: function() {
+        return data.vm_disk_info || [];
+      },
+
+      // Return a new copy of the disk updated to have the given image attached
+      // to it.
+      attachIso: function(diskId, image) {
+        var disk = this.getDiskById(diskId);
+
+        return {
+          disk_address: {
+            device_index: disk.disk_address.device_index,
+            device_bus: disk.disk_address.device_bus
+          },
+          flash_mode_enabled: disk.flash_mode_enabled,
+          is_cdrom: true,
+          is_empty: false,
+          vm_disk_clone: {
+            disk_address: {
+              vmdisk_uuid: image.vm_disk_id
+            },
+            minimum_size: image.vm_disk_size
+          }
+        }
+      }
+    }
+  }
+
   // DataManager
   // -----------
   // Handles the interchange of data between the app and the
@@ -135,6 +261,23 @@
   var DataManager = {
     // The URL param for proxy cluster UUID
     PARAM_PROXY_CLUSTER_UUID: 'proxyClusterUuid',
+
+    // Header to track the client type for API calls
+    CLIENT_TRACKING_HEADER: 'X-Nutanix-Client-Type',
+
+    // The client id for tracking
+    CLIENT_ID: 'ui',
+
+    // Cluster UUID to include in API requests. This is used when proxying
+    // requests through PC to PE.
+    proxyClusterUuid: null,
+
+    initialize: function() {
+      var _this = this;
+      $.ajaxPrefilter(function (options, originalOptions, jqXhr) {
+        jqXhr.setRequestHeader(_this.CLIENT_TRACKING_HEADER, _this.CLIENT_ID);
+      });
+    },
 
     // Gets the session info from the API
     getSessionInfo: function (success, error, useV3) {
@@ -149,25 +292,129 @@
       $.get(url).done(success).fail(error);
     },
 
-    // Gets the VM details from the REST API
-    getVmDetails: function (vmId, clusterId, success, error, noV1Access) {
-      var contextRoot = noV1Access ? Constants.V3_API_ROOT : Constants.V1_API_ROOT;
-      var url = contextRoot + 'vms/' + vmId;
-      if (clusterId) {
-        url += '?' + this.PARAM_PROXY_CLUSTER_UUID + '=' + clusterId;
+    // Set the proxy
+    setProxyCluster: function(uuid) {
+      this.proxyClusterUuid = uuid;
+    },
+
+    // Return the appropriate base url for the given API version.
+    getBaseUrl: function(version) {
+      switch(version) {
+        case 'v0.8':
+          return Constants.V08_API_ROOT;
+        case 'v1':
+          return Constants.V1_API_ROOT;
+        case 'v2':
+          return Constants.V2_API_ROOT;
+        default:
+          return Constants.V3_API_ROOT;
+      }
+    },
+
+    // Sends a GET request to the server.
+    get: function(url, query) {
+      query = query || {};
+
+      // Inject the proxy cluster into the query params if needed.
+      if (this.proxyClusterUuid) {
+        query[this.PARAM_PROXY_CLUSTER_UUID] = this.proxyClusterUuid;
       }
 
-      $.ajax({
-        type: 'GET',
+      return $.get(url, query);
+    },
+
+    // Sends a PUT request to the server.
+    put: function(url, data) {
+      // Inject the proxy cluster into the query params if needed.
+      if (this.proxyClusterUuid) {
+        var query = {};
+        query[this.PARAM_PROXY_CLUSTER_UUID] = this.proxyClusterUuid;
+        url += '?' + $.param(query);
+      }
+
+      return $.ajax({
+        type: 'PUT',
         url: url,
-        contentType: 'application/json'
-      }).done(function (response, status, jqXHR) {
-        success(response, status, jqXHR);
-      }).fail(function (response, status, jqXHR) {
-        global.console && global.console.log('Error fetching details ' +
-          'for VM Id: ' + vmId);
-        error(response, status, jqXHR);
+        contentType: 'application/json',
+        data: JSON.stringify(data)
       });
+    },
+
+    // Gets the VM details for a VM using the requested api version.
+    //
+    // @param {string} vmId - UUID of the VM to fetch.
+    // @param {string} version - API version to use.
+    getVm: function(vmId, version) {
+      var baseUrl = this.getBaseUrl(version);
+      var url = baseUrl + 'vms/' + vmId;
+      var queryParams = { include_vm_disk_config: true };
+
+      return DataManager.get(url, queryParams);
+    },
+
+    // Gets the VM details from the REST API.
+    getVmDetails: function (vmId, success, error, noV1Access) {
+      this.getVm(vmId, noV1Access ? 'v3' : 'v1').done(success).fail(error);
+    },
+
+    // Simple poller used to wait for task completion.
+    //
+    // @param options.interval - Polling interval in milliseconds.
+    // @param options.timeout - Number of intervals to poll for.
+    // @param options.success - Callback called on task success.
+    // @param options.error - Callback called on task failure.
+    waitForTask: function(taskId, options) {
+      var timeout = options.timeout || 10;      // Default 5 minutes
+      var interval = options.interval || 30000; // Default 30 seconds
+      var iterations = 0;
+      var version = options.apiVersion || 'v3';
+      var getHandler = (version === 'v3') ? getV3TaskHandler : getV2TaskHandler;
+
+      var url = DataManager.getBaseUrl(version) + 'tasks/' + taskId
+      var pollId = setInterval(function() {
+        // Keep checking the task until the polling timeout.
+        if (iterations < timeout) {
+          DataManager.get(url)
+            .done(getHandler(pollId, options))
+            .fail(function() {
+              clearInterval(pollId);
+              error();
+            });
+          iterations++
+        } else {
+          clearInterval(pollId);
+          options.error('Operation timed out');
+        }
+      }, interval);
+    },
+
+    // Get the available images on the cluster.
+    getImages: function(success, error) {
+      var url = DataManager.getBaseUrl('v2') + 'images';
+      DataManager.get(url).done(success).fail(error);
+    },
+
+    // Update the disk configuration for the VM.
+    updateDisks: function(vmId, data, success, error) {
+      var url = DataManager.getBaseUrl('v2') + 'vms/' + vmId + '/disks/update';
+
+      DataManager.put(url, data)
+        .then(function(response) {
+          // The disk attach operation shouldn't take very long to complete so
+          // we will check the status of the task every second for up to
+          // 2 minutes.
+          DataManager.waitForTask(response.task_uuid, {
+            interval: 1000,
+            timeout: 120,
+            apiVersion: 'v2',
+            success: success,
+            error: error
+          });
+        })
+        .fail(function (response, status, jqXHR) {
+          global.console && global.console.log('Failed to mount image');
+          error(response, status, jqXHR);
+        });
     },
 
     // Sets the power state for the VM by invoking the REST API
@@ -209,7 +456,6 @@
     this.encrypt = options.encrypt;
     this.targetEl = options.targetEl;
     this.onUpdateState = options.onUpdateState;
-    options.internalMode = true;
     this.skipVncHandshake = options.skipVncHandshake;
 
     this.keymaps = global.scancode_mapper.list();
@@ -217,6 +463,11 @@
 
   // Starts the noVNC session
   ConsoleManager.prototype._startNoVncSession = function () {
+    // added by harjeet.singh@nutanix.com to add custom header.
+    // for ENG-112665
+    // WebSocket will not allow any custom headers otherwise.
+    document.cookie = 'X-Nutanix-Client-Type=ui; path=/';
+
     global.WebUtil.init_logging(
       global.WebUtil.getQueryVar('logging', 'warn'));
 
@@ -310,26 +561,58 @@
     this.dataLoaded = false;
     this.uhuraVm = (Util.getUrlParameter('uhura') === 'true');
     this.useV3 = (Util.getUrlParameter('useV3') === 'true');
+    this.isXi = (Util.getUrlParameter('isXi') === 'true');
     this.noV1Access = (Util.getUrlParameter('noV1Access') === 'true');
+    this.renderMode = (Util.getUrlParameter('attached') === 'true')
+      ? Constants.MODE_ATTACHED
+      : Constants.MODE_DETACHED;
+    this.disabledFeats = [];
+
+    DataManager.setProxyCluster(this.clusterId);
   };
 
   // Fetches the data from the API and renders the app
   VmConsoleView.prototype.loadDataAndRender = function () {
     var _this = this;
+    var vmId = _this.vmId;
+    var onError = function() {
+      _this.showStatus('Error fetching VM details');
+    };
 
     this.showStatus('Fetching VM info...');
     this.runKbdSupportTest();
 
     var options = this.getQueryParamOptions();
-    options.internalMode = true;
     if ((options.hypervisorType && options.vmName &&
          options.controllerVm) || options.internalMode) {
       this.startConsoleSession(options);
     } else {
-      DataManager.getVmDetails(this.vmId, this.clusterId,
-        _this.startConsoleSession.bind(_this), function () {
-          _this.showStatus('Error fetching VM details');
-        }, this.noV1Access);
+      DataManager.getVmDetails(vmId, function(res) {
+        // Since we cannot use the v2 APIs for CVMs, features depending on this
+        // must be disabled. If we're unable to determine it's a CVM assume it
+        // is for safety.
+        var isCvm = res.controllerVm || !res.hasOwnProperty('controllerVm');
+        if (isCvm) {
+          _this.disabledFeats.push(Constants.FEAT.MOUNT_ISO);
+          _this.startConsoleSession(res);
+          return;
+        }
+
+        // Attempt to fetch the vm disk information required for the mount
+        // iso feature.
+        DataManager.getVm(vmId, 'v2', { include_vm_disk_config: true })
+          .then(function(v2res) {
+            _this.vm = VmModel(v2res);
+            _this.startConsoleSession(res);
+          })
+          .fail(function() {
+            // If the v2 vm fetch failed for some reason then just disable the
+            // mount iso feature and proceed.
+            _this.disabledFeats.push(Constants.FEAT.MOUNT_ISO);
+            _this.startConsoleSession(res);
+          });
+
+      }, onError, this.noV1Access);
     }
   };
 
@@ -403,10 +686,20 @@
     var _this = this;
     global.$('body').on('mouseover click keydown', this.updateIdleTime);
 
+    // Show link to react console if user is using the old console
+    if (localStorage.getItem('nutanix_use_rvnc') === 'false') {
+      $('.action-link')
+        .attr('href',  Util.createNewConsoleURL())
+        .show();
+    }
+
+    // Toggle UI feature visibility based on support.
+    $('#action-mount-iso').toggle(
+      this.isFeatSupported(Constants.FEAT.MOUNT_ISO));
+
     if (!this.dataLoaded) {
       // Change the style if this is attached mode or not
-      var attached = Util.getUrlParameter('attached');
-      if (attached === 'true') {
+      if (this.renderMode === Constants.MODE_ATTACHED) {
         // This means that VNC is running inside Prism UI
         $('body').addClass('mode_attached');
 
@@ -435,10 +728,27 @@
       }
 
       // Style the dropdown
-      $('select').fancySelect({ type: 'select' });
+      $('select:not(".browser-select")').fancySelect({ type: 'select' });
 
       this.loadDataAndRender();
     } else {
+      // Enable mount ISO action if possible.
+      if (this.isFeatSupported(Constants.FEAT.MOUNT_ISO)) {
+        $('#action-mount-iso').show();
+
+        if (this.vm && this.vm.hasCdrom()) {
+          // Register action handler.
+          $('#action-mount-iso').on('click',
+            this.renderMountIsoForm.bind(this));
+        } else {
+          // If the feature is supported but there are no CD-ROM drives available
+          // then we need to disable it and let the user know why via tooltip.
+          $('#action-mount-iso')
+            .attr('title', 'No available CD-ROM drives.')
+            .addClass('disabled');
+        }
+      }
+
       // Attach the event handlers
       $('#sendCtrlAltDelButton').on('click', this.sendCtrlAltDel.bind(this));
       $('#vm_screenshot').on('click', this.vmScreenshot.bind(this));
@@ -448,12 +758,40 @@
     }
   };
 
+  // Return a boolean indicating if the given feature is supported on this
+  // environment.
+  VmConsoleView.prototype.isFeatSupported = function(featId) {
+    if (featId === Constants.FEAT.MOUNT_ISO) {
+      // This feature depends on v1/v2 APIs so disable it for users who do
+      // not have access to these. It is also not supported when the console is
+      // rendered within the Prism UI since the user will have all VM update
+      // actions available to them in that case.
+      return this.dataLoaded && !this.noV1Access &&
+        this.disabledFeats.indexOf(Constants.FEAT.MOUNT_ISO) === -1 &&
+        this.renderMode === Constants.MODE_DETACHED;
+    }
+
+    // Assume if we don't know about the feature ID that it's not supported.
+    return false;
+  }
+
   // Replaces the status to show a friendly VM name
   VmConsoleView.prototype.showVmNameInStatus = function () {
     var statusEl = $('#noVNC_status');
     var originalStatus = statusEl.text();
     var status = originalStatus.replace('QEMU (' + this.vmId +')',
       this.vmName);
+
+    // Handle an edge case to render the correct status message for ESX
+    // upon successful connection.
+    // @see ENG-196316
+    if (this.hypervisorType === Constants.HYPERVISOR_TYPE.ESX) {
+      if (originalStatus.indexOf('encrypted') > -1) {
+        status = 'Connected (encrypted) to: ' + this.vmName;
+      } else if (originalStatus.indexOf('unencrypted') > -1) {
+        status = 'Connected (unencrypted) to: ' + this.vmName;
+      }
+    }
     statusEl.text(status);
   };
 
@@ -509,15 +847,26 @@
     }
 
     var password = global.WebUtil.getQueryVar('password', '');
-    var path = global.WebUtil.getQueryVar('path', 'websockify');
+    var path = global.WebUtil.getQueryVar('path');
 
+    var clusterId = global.WebUtil.getQueryVar('clusterId', null);
+    // path for ESX
+    // Note: VNC connections are always proxied through Java Gateway
+    // For AHV, the path is vnc/vm/<vm uuid>/proxy?proxyClusterUuid=<uuid>
+    // For ESX, the path is vm/console/<vm uuid>/proxy?proxyClusterUuid=<uuid>
     if (this.hypervisorType === Constants.HYPERVISOR_TYPE.ESX) {
       path = 'vm/console/' + this.vmId + '/proxy';
     }
 
+    // Since aplos endpoint is not reliable, both SSP and XI users will use
+    // java gateway endpoint for now.
+    // @see ENG-181278, ENG-185807
+    if (this.noV1Access && this.useV3) {
+      path = 'vnc/vm/' + this.vmId + '/proxy';
+    }
+
     // Read the clusterId query param and use it as "proxyClusterUuid"
     // in the websocket request.
-    var clusterId = global.WebUtil.getQueryVar('clusterId', null);
     if (clusterId) {
       path += '?' + DataManager.PARAM_PROXY_CLUSTER_UUID + '=' + clusterId;
     }
@@ -568,9 +917,13 @@
     // Move focus to VNC console
     $('#vm_screenshot').blur();
 
+    var image = new Image();
+    image.src = dataURL;
+
     // Delay action to allow time for focus change
     global.setTimeout(function(){
-      global.open(dataURL);
+      var newWindow = global.open('');
+      newWindow.document.write(image.outerHTML);
     }, 100);
   };
 
@@ -578,6 +931,139 @@
   VmConsoleView.prototype.sendCtrlAltDel = function () {
     this.conMan.sendCtrlAltDel();
   };
+
+  // Mount disk disk image to the VM CD-ROM drive.
+  VmConsoleView.prototype.mountIso = function(image, diskId, options) {
+    // Attach the desired ISO to the disk.
+    var data = { vm_disks: [this.vm.attachIso(diskId, image)] };
+
+    DataManager.updateDisks(this.vm.getId(), data,
+      function onSuccess() {
+        options.success();
+      },
+      function onError() {
+        options.error('Failed to mount ');
+      });
+  };
+
+  // Render the mount ISO form modal used for attaching a disk image to a
+  // CD-ROM drive on the VM.
+  VmConsoleView.prototype.renderMountIsoForm = function() {
+    var _this = this;
+    var $dialogEl = $('#dialog-mount-disk');
+    var $msg = $dialogEl.find('.msg');
+    var $content = $dialogEl.find('.content');
+    var $selectImage = $content.find('#select-image');
+    var $selectDrive = $content.find('#select-cdrom');
+    var imageMap = {};
+    var modal;
+
+    var onSuccess = function(response) {
+      // Only active ISO images are applicable to this operation.
+      var images = response.entities.filter(function(image) {
+        return (image.image_state === 'ACTIVE' &&
+                image.image_type === 'ISO_IMAGE');
+      });
+
+      // Bail if there are no images to select since there's nothing for the
+      // user to do in this case.
+      if (!images.length) {
+        $msg.html('No available images.')
+        $content.hide();
+        return;
+      }
+      // Reset inputs.
+      $selectImage.empty();
+      $selectDrive.empty();
+
+      // Populate the available ISOs.
+      images.forEach(function(image) {
+        imageMap[image.vm_disk_id] = image;
+        $selectImage.append(
+          '<option value="' + image.vm_disk_id + '">' + image.name + '</option>');
+      });
+      // Populate the available CD-ROM drives.
+      _this.vm.getCdroms().forEach(function(drive) {
+        // Disk labels are <bus>.<index> so we use that as the value since
+        // vmdisk_uuid is not populated for empty drives.
+        var label = drive.disk_address.disk_label;
+        // Get the mounted image of the disk.
+        let image;
+        if (!drive.is_empty) {
+          image = imageMap[drive.source_disk_address.vmdisk_uuid];
+        }
+        var state = drive.is_empty
+          ? 'Empty'
+          : image && image.name || 'Has Disk';
+
+        $selectDrive.append(
+          '<option value="' + label + '">' +
+            label + ' - ' + state +
+          '</option>');
+      });
+
+      // Toggle content visibility.
+      $('#action-mount').button('enable');
+      $msg.hide();
+      $content.show();
+    }
+    var showMessage = function(msg) {
+      $('#action-mount').button('disable');
+      $content.hide();
+      $msg.html(msg).show();
+    }
+    var onError = function(msg) {
+      msg = msg || 'An unknown error occurred';
+      return function _errorHandler() {
+        showMessage(msg);
+      }
+    }
+
+    // Show the mount ISO dialog.
+    modal = $dialogEl.dialog({
+      resizable: false,
+      modal: true,
+      draggable: false,
+      closeText: '',
+      buttons: [
+        {
+          text: 'Cancel',
+          click: function() { modal.dialog('close') }
+        },
+        {
+          id: 'action-mount',
+          text: 'Mount',
+          disabled: true,
+          click: function() {
+            var diskId = $selectDrive.val();
+            var image = imageMap[$selectImage.val()];
+            var imageName = image.name || 'ISO';
+
+            showMessage('Mounting ' + imageName + ' on ' + diskId + '.');
+
+            _this.mountIso(image, diskId, {
+              success: function() {
+                modal.dialog('close');
+                // Fetching VM info again to update 'CD-ROM Drive' section in mount ISO dialog.
+                DataManager.getVm(Util.getVmId(), 'v2')
+                    .then(function(result) {
+                      _this.vm = VmModel(result);
+                    });
+              },
+              error: onError(
+                'Failed to mount ' + imageName + ' on ' + diskId + '.')
+            });
+          }
+        },
+      ]
+    });
+
+    // Render loader and fetch the available images.
+    showMessage('Fetching available images...');
+    DataManager.getImages(
+      onSuccess,
+      onError('Failed to fetch available images.'));
+  }
 
   // Send a power signal to the VM when the power button is clicked
   VmConsoleView.prototype.onPowerButtonClick = function () {
@@ -713,7 +1199,7 @@
         el.removeClass('disabled')
           .attr('title', el.attr('data-tooltip'));
       });
-      $('#conn-notif').dialog('close');
+      $('#conn-notif').closest('.ui-dialog-content').dialog('close');
 
       this.resizeWindowToFit();
     } else {
@@ -908,6 +1394,7 @@
   // The reason why we call jquery's ready function is that we need to
   // render the view very quickly.
   $(function() {
+    DataManager.initialize();
     var view = new VmConsoleView();
 
     // Expose this handler as it is called from within rfb.js
