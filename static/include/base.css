@@ -296,6 +296,24 @@ html {
  /*box-shadow:inset 0.4px 0.4px 0.4px #000000;*/
 }
 
+/*React console link*/
+.action-link {
+  font-size: 14px;
+  line-height: 26px;
+  color: #F8F9FA;
+  text-decoration: none;
+  float: right;
+  padding-right: 10px;
+}
+
+.action-link:visited {
+  color: #F8F9FA;
+}
+
+.action-link:hover,
+.action-link:active {
+   color: #B8BFCA;
+}
 
 /*Settings Bubble*/
 .triangle-right {
