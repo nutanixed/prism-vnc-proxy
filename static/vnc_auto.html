@@ -35,23 +35,29 @@
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="include/base.css" title="plain">
-    <link rel="stylesheet" href="include/jquery-ui-1.8.24.custom.css"
+    <link rel="stylesheet" href="include/jquery-ui.css"
           title="plain">
     <link rel="stylesheet" href="include/override-base.css" title="plain">
     <link rel="stylesheet" href="include/fancySelect.css" title="plain">
     <link rel="stylesheet" href="include/fancyselect-override.css"
           title="plain">
-    <script src="include/jquery-1.7.1.min.js"></script>
-    <script src="include/jquery-ui-1.8.24.custom.min.js"></script>
+    <script src="include/jquery-3.5.1.js"></script>
+    <script src="include/jquery-ui.js"></script>
     <script src="include/fancySelect.js"></script>
   </head>
 
-  <body class="hello" style="margin: 0px;">
+  <body style="margin: 0px;">
     <div id="noVNC_screen">
       <div id="noVNC_status_bar"
            class="noVNC_status_bar"
            style="margin-top: 0px; max-height: 48px">
         <div id="noVNC_buttons">
+          <!-- Nutanix/JonK: remove mounting from standalone mode  -->
+          <!-- <div id="action-mount-iso"
+            class="button"
+            title="Mount ISO">
+            Mount ISO
+          </div> -->
           <div class="kbd-lang"
                title="Select keyboard language layout">
             <div class="kbd-icon">
@@ -103,7 +109,8 @@
               </g>
             </svg>
           </div>
-          <div class="button disabled"
+          <!-- Nutanix/JonK: remove mounting from standalone mode  -->
+          <!-- <div class="button disabled"
                title="Power"
                id="powerOffActionsButton"
                data-tooltip="Power"
@@ -114,11 +121,46 @@
                 <path d="M1723.8 1150.6c-58.8-58.7-153.9-58.7-212.7 0c-58.8 58.7-58.8 154 0 212.7l0 0 c134.7 134.9 201.6 310.3 201.8 487.1c-0.1 176.8-67 352.2-201.8 487.1c-134.9 134.8-310.3 201.6-487.1 201.8 c-176.8-0.2-352.2-67-487-201.8c-134.8-134.9-201.6-310.3-201.8-487.1c0.2-176.8 67-352.2 201.8-487.1c58.8-58.7 58.8-154 0-212.7 c-58.7-58.8-153.9-58.8-212.7 0c-193 192.8-290.1 447-289.9 699.8c-0.2 252.8 96.9 506.9 289.9 699.8 c192.8 193 446.9 290 699.7 289.9h0.7c252.6 0 506.4-97 699.1-289.9c193-192.9 290.1-447 289.8-699.8 C2013.9 1597.6 1916.8 1343.4 1723.8 1150.6z M1024.1 2000.8c83 0 150.4-67.4 150.4-150.4V942.4c0-83-67.4-150.4-150.4-150.4 c-83.1 0-150.5 67.4-150.5 150.4v907.9C873.6 1933.4 941 2000.8 1024.1 2000.8z"/>
               </g>
             </svg>
-          </div>
+          </div> -->
         </div>
         <div id="noVNC_status" style="position: relative; height: auto;">
           Loading
         </div>
+        <!-- Nutanix/JonK: remove mounting from standalone mode  -->
+        <!-- <a class='action-link' style="display:none;">
+          Update Console
+        </a>
+        <div id="dialog-mount-disk"
+          title="Mount Disk Image"
+          style="display:none;">
+          <div class="msg">Fetching available images...</div>
+          <div class="content">
+            <p class="description">
+              Select the desired ISO along with the CD-ROM drive you wish to
+              mount it to. Please note, any ISO currently attached to the
+              selected drive will be ejected and replaced by your selection.
+            </p>
+            <form>
+              <div class="form-control">
+                <label for="select-image">ISO File</label>
+                <div class="select-wrapper">
+                  <select id="select-image"
+                    class="browser-select">
+                  </select>
+                </div>
+              </div>
+              <div class="form-control">
+                <label for="select-cdrom">CD-ROM Drive</label>
+                <div class="select-wrapper">
+                  <select id="select-cdrom"
+                    name="select-cdrom"
+                    class="browser-select">
+                  </select>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div> -->
         <div id="dialog-form" title="Power off/Reset VM"
              style="display:none;">
           <form>
