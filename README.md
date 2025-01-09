@@ -89,13 +89,6 @@ We welcome contributions to improve the Prism VNC Proxy. Please follow these gui
 4. Submit a pull request with a detailed description of your changes.
 
 ## TODOs
-- Should provide fixed versions of `requirements.txt`?
-- Should do linting, `pyflake`, etc.
-- GitHub Actions runner for unit tests, etc.
-- Legal review for licensing and distribution.
-- Move `noVNC` to a submodule?
-- At leaast rebase `noVNC` to latest to flush out any private diffs
-- Drop http handler as it is actually unused
-- Cleanup demo code (and perhaps move it to its own public repo?)
+- Consider adding project unit tests via pytest, etc.
 
 For more detailed information, please refer to the source code and comments within the files.

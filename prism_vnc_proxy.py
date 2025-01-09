@@ -7,9 +7,6 @@ This module implements a small HTTP proxy and frontend for VM VNC websockets.
 It uses aiohttp to run an HTTP server that proxies websocket traffic through
 a Prism gateway and provides a frontend UI for Acropolis VM VNC websockets.
 
-Classes:
-  WSGIPrismWebsocketProxy: Handles websocket proxying to the Prism gateway.
-
 Functions:
   parse_opts(): Parses command line options and returns an optparse options
       object.
@@ -46,14 +43,13 @@ Copyright:
     (c) 2025 Nutanix Inc. All rights reserved.
 """
 
-from aiohttp import web
-
 import argparse
 import inspect
 import logging
 import os
 import sys
 
+from aiohttp import web
 from wsgi_file_handler import wsgi_file_handler
 from wsgi_prism_websocket_proxy import WSGIPrismWebsocketProxy
 
@@ -145,17 +141,13 @@ def main():
     return 0
 
 
-def assert_minimum_python_version():
-    assert sys.version_info[:2] >= (3, 9), "Requires Python 3.9 or later"
-    print("Running Python %s" % (sys.version,))
-
-
-def assert_virtualenv():
-    assert "VIRTUAL_ENV" in os.environ, "Not running inside a virtual environment"
-    print("Running inside a python virtual environment")
-
-
 if __name__ == "__main__":
-    assert_minimum_python_version()
-    assert_virtualenv()
+    # Ensure we are running Python 3.9 or later.
+    assert sys.version_info[:2] >= (3, 9), "Requires Python 3.9 or later"
+    log.info("Running Python %s", sys.version)
+
+    # Ensure we are running inside a virtual environment.
+    assert "VIRTUAL_ENV" in os.environ, "Not running inside a virtual environment"
+    log.info("Running inside a python virtual environment")
+
     sys.exit(main())

@@ -29,12 +29,14 @@ Copyright:
     (c) 2025 Nutanix Inc. All rights reserved.
 """
 
-from aiohttp import web
-
-import aiofiles
 import logging
 import mimetypes
 import os
+
+import aiofiles
+import aiohttp
+
+from aiohttp import web
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +65,6 @@ async def wsgi_file_handler(request):
         or an error message.
 
     Raises:
-        aiofiles.threadpool.AsyncFileIOError: If an asynchronous file I/O
-            error occurs.
         aiohttp.web.HTTPException: If an HTTP-related exception occurs.
         Exception: If any other unexpected error occurs.
     """
@@ -73,19 +73,19 @@ async def wsgi_file_handler(request):
         file_path = os.path.join(
             'static', request.match_info.get(
                 'file_path', 'index.html'))
-        logger.debug(f"Received request for file: {file_path}")
+        logger.debug("Received request for file: %s", file_path)
 
         if '..' in file_path or file_path.startswith('/'):
-            logger.warning(f"Attempt to access forbidden path: {file_path}")
+            logger.warning("Attempt to access forbidden path: %s", file_path)
             return web.Response(status=403, text="Forbidden")
 
         if not os.path.isfile(file_path):
-            logger.warning(f"File not found: {file_path}")
+            logger.warning("File not found: %s", file_path)
             return web.Response(status=404, text="File not found")
 
-        logger.debug(f"Serving file: {file_path}")
-    except Exception as e:
-        logger.error(f"Exception occurred while processing the file path: {e}")
+        logger.debug("Serving file: %s", file_path)
+    except (OSError, ValueError) as e:
+        logger.error("Exception occurred while processing the file path: %s", e)
         return web.Response(status=500, text="Internal server error")
 
     try:
@@ -102,12 +102,6 @@ async def wsgi_file_handler(request):
                 await response.write(chunk)
             await response.write_eof()
             return response
-    except aiofiles.threadpool.AsyncFileIOError as e:
-        logger.error(f"Async file I/O error reading file {file_path}: {e}")
-        return web.Response(status=500, text="Internal server error")
     except aiohttp.web.HTTPException as e:
-        logger.error(f"HTTP exception occurred: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error reading file {file_path}: {e}")
+        logger.error("HTTP exception occurred: %s", e)
         return web.Response(status=500, text="Internal server error")

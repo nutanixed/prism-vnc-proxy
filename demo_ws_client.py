@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-demo-ws-client.py
+demo_ws_client.py
 
 This script demonstrates a simple WebSocket client using the `websockets`
 library in Python. The client connects to a WebSocket server running on
@@ -9,7 +9,7 @@ localhost at port 9998, sends a greeting message to the server, and prints
 the response received from the server.
 
 Usage:
-    python3 demo-ws-client.py
+    python3 demo_ws_client.py
 
 Functions:
     - connect(): Asynchronous function that establishes a WebSocket
@@ -64,21 +64,21 @@ async def connect():
     """
 
     uri = "ws://localhost:9998"
-    log.info(f"Attempting to connect to {uri}")
+    log.info("Attempting to connect to %s", uri)
     try:
         async with websockets.connect(uri) as websocket:
             log.info("Connected to the server")
             await websocket.send("Hello, Server!")
             try:
                 response = await websocket.recv()
-                log.info(f"Received from server: {response}")
+                log.info("Received from server: %s", response)
             except websockets.exceptions.ConnectionClosedError as e:
-                log.error(f"Connection closed while receiving response: {e}")
+                log.error("Connection closed while receiving response: %s", e)
             except Exception as e:
-                log.error(f"An error occurred while receiving response: {e}")
+                log.error("An error occurred while receiving response: %s", e)
     except websockets.exceptions.ConnectionClosedError as e:
-        log.error(f"Connection closed with error: {e}")
+        log.error("Connection closed with error: %s", e)
     except Exception as e:
-        log.error(f"An error occurred: {e}")
+        log.error("An error occurred: %s", e)
 
 asyncio.run(connect())

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-demo-ws-server.py
+demo_ws_server.py
 
 This script sets up a simple WebSocket server using the aiohttp library.
 The server listens on all network interfaces at port 9999 and accepts
@@ -78,7 +78,7 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
     return ws
 
 
-async def main(app):
+async def main(app_context):
     """
     Asynchronous main function to set up and start the web server.
 
@@ -96,7 +96,7 @@ async def main(app):
     """
 
     try:
-        runner = web.AppRunner(app)
+        runner = web.AppRunner(app_context)
         await runner.setup()
         site = web.TCPSite(runner, host=HOST, port=PORT)
         await site.start()
@@ -105,7 +105,7 @@ async def main(app):
             await asyncio.Event().wait()
         except asyncio.CancelledError:
             log.info('server shutdown initiated by user')
-    except Exception as e:
+    except (OSError, web.HTTPException) as e:
         log.error('error starting server: %s', str(e))
     finally:
         await runner.cleanup()
