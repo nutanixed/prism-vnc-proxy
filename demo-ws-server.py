@@ -78,7 +78,7 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
     return ws
 
 
-async def main():
+async def main(app):
     """
     Asynchronous main function to set up and start the web server.
 
@@ -91,6 +91,7 @@ async def main():
         None
 
     Raises:
+        asyncio.CancelledError: If the server shutdown is initiated by the user.
         Exception: If there is an error starting the server.
     """
 
@@ -100,7 +101,10 @@ async def main():
         site = web.TCPSite(runner, host=HOST, port=PORT)
         await site.start()
         log.info('server is running')
-        await asyncio.Event().wait()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            log.info('server shutdown initiated by user')
     except Exception as e:
         log.error('error starting server: %s', str(e))
     finally:
@@ -109,4 +113,4 @@ async def main():
 if __name__ == '__main__':
     app = web.Application()
     app.add_routes([web.get('/', websocket_handler)])
-    asyncio.run(main())
+    asyncio.run(main(app))
