@@ -22,7 +22,7 @@ Functions:
 Usage:
     Run the script with optional arguments to specify the host, port, and
     remote WebSocket URL.
-    
+
     Example: python demo-ws-proxy.py --host localhost --port 9998 --remote_url ws://localhost:9999
 
 Arguments:
@@ -33,7 +33,7 @@ Arguments:
 Logging:
     The script logs various events and errors, including new connections,
     message forwarding, and connection closures.
-    
+
 Author:
     Jon Kohler (jon@nutanix.com)
     Originally based on Gist:
@@ -47,10 +47,11 @@ import argparse
 import asyncio
 import logging
 import websockets
-import sys
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
 log = logging.getLogger(__name__)
+
 
 async def proxy_connection(client_ws):
     """
@@ -100,6 +101,7 @@ async def proxy_connection(client_ws):
     except Exception as e:
         log.error(f"Unexpected error: {e}")
 
+
 async def serverToClient(server_ws, client_ws):
     """
     Handles the communication from the server WebSocket to the client
@@ -131,6 +133,7 @@ async def serverToClient(server_ws, client_ws):
         log.info("Connection closed normally in serverToClient")
     except Exception as e:
         log.error(f"Error in serverToClient: {e}")
+
 
 async def clientToServer(server_ws, client_ws):
     """
@@ -164,6 +167,7 @@ async def clientToServer(server_ws, client_ws):
         log.info("Connection closed normally in clientToServer")
     except Exception as e:
         log.error(f"Error in clientToServer: {e}")
+
 
 async def main():
     """

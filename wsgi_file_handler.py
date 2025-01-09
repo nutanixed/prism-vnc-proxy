@@ -38,29 +38,30 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 async def wsgi_file_handler(request):
     """
     Handle an incoming HTTP request and serve a file.
-    
-    The function retrieves the file path from the request's match_info. 
-    
+
+    The function retrieves the file path from the request's match_info.
+
     If the file path is invalid or attempts to access forbidden paths, it
     returns a 403 response.
-    
-    If the file does not exist, it returns a 404 response. 
-    
+
+    If the file does not exist, it returns a 404 response.
+
     Otherwise, it reads the file content asynchronously and streams it back
-    in the response body. 
-    
+    in the response body.
+
     If an error occurs during file reading, it returns a 500 response.
-    
+
     Args:
         request (aiohttp.web.Request): The incoming HTTP request.
-        
+
     Returns:
         aiohttp.web.Response: The HTTP response containing the file content
         or an error message.
-        
+
     Raises:
         aiofiles.threadpool.AsyncFileIOError: If an asynchronous file I/O
             error occurs.
@@ -69,7 +70,9 @@ async def wsgi_file_handler(request):
     """
 
     try:
-        file_path = os.path.join('static', request.match_info.get('file_path', 'index.html'))
+        file_path = os.path.join(
+            'static', request.match_info.get(
+                'file_path', 'index.html'))
         logger.debug(f"Received request for file: {file_path}")
 
         if '..' in file_path or file_path.startswith('/'):
@@ -90,7 +93,7 @@ async def wsgi_file_handler(request):
             chunk_size = 8192
             response = web.StreamResponse(
                 headers={'Content-Type': mimetypes.guess_type(file_path)[0] or
-                    'application/octet-stream'})
+                         'application/octet-stream'})
             await response.prepare(request)
             while True:
                 chunk = await f.read(chunk_size)
