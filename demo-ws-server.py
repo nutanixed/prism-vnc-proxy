@@ -16,14 +16,14 @@ Functions:
     websocket_handler(request: web.Request) -> web.StreamResponse:
         Handles incoming WebSocket connections, sends the client's remote
         address, and closes the connection.
-    
+
     main():
         Sets up and starts the WebSocket server, and keeps it running
         indefinitely.
 
 Usage:
     Run this script directly to start the WebSocket server.
-    
+
 Author:
     Jon Kohler (jon@nutanix.com)
 
@@ -34,13 +34,15 @@ Copyright:
 import asyncio
 import logging
 
-from aiohttp import web, WSMsgType, WSMessage
+from aiohttp import web
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
 log = logging.getLogger(__name__)
 
 HOST = '0.0.0.0'
 PORT = 9999
+
 
 async def websocket_handler(request: web.Request) -> web.StreamResponse:
     """
@@ -57,7 +59,7 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
 
     Returns:
         web.StreamResponse: The WebSocket response.
-        
+
     Raises:
         Exception: For any other errors that occur during the handling of
         the WebSocket connection.
@@ -69,10 +71,12 @@ async def websocket_handler(request: web.Request) -> web.StreamResponse:
         await ws.send_str(str(request.remote + " connected, hello!"))
         log.info('accepted connection from %s', request.remote)
     except Exception as e:
-        log.error('error handling connection from %s: %s', request.remote, str(e))
+        log.error('error handling connection from %s: %s',
+                  request.remote, str(e))
     finally:
         await ws.close()
     return ws
+
 
 async def main():
     """

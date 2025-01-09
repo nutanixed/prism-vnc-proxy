@@ -27,24 +27,26 @@ import asyncio
 import logging
 import websockets
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
 log = logging.getLogger(__name__)
+
 
 async def connect():
     """
     Establishes a WebSocket connection to a server, sends a greeting message,
     and handles the response.
 
-    This function attempts to connect to a WebSocket server at the specified 
-    URI. Upon successful connection, it sends a "Hello, Server!" message to 
-    the server and waits for a response. The function logs the connection 
-    status, sent message, and received response. It also handles and logs any 
+    This function attempts to connect to a WebSocket server at the specified
+    URI. Upon successful connection, it sends a "Hello, Server!" message to
+    the server and waits for a response. The function logs the connection
+    status, sent message, and received response. It also handles and logs any
     exceptions that occur during the connection and communication process.
 
     Exceptions Handled:
-        - websockets.exceptions.ConnectionClosedError: Raised when the 
+        - websockets.exceptions.ConnectionClosedError: Raised when the
           connection is closed unexpectedly.
-        - Exception: Catches any other exceptions that may occur during the 
+        - Exception: Catches any other exceptions that may occur during the
           connection or communication.
 
     Logging:
