@@ -3,9 +3,12 @@
 """
 wsgi_prism_websocket_proxy.py
 
-This module provides a WSGI application for proxying WebSocket connections to a Prism server.
+This module provides a WSGI application for proxying WebSocket connections to
+a Prism server.
+
 Classes:
-    WSGIPrismWebsocketProxy: A class that handles WebSocket proxying to a Prism server.
+    WSGIPrismWebsocketProxy: A class that handles WebSocket proxying to a Prism
+    server.
 
 WSGIPrismWebsocketProxy:
     Methods:
@@ -13,25 +16,32 @@ WSGIPrismWebsocketProxy:
             Initializes the proxy with the given host, user, and password.
         _get_session_cookie(self):
         async prism_websocket_handler(self, request):
-            Handles incoming WebSocket requests, establishes a connection to the Prism server, 
-            and proxies messages between the client and the server.
+            Handles incoming WebSocket requests, establishes a connection to
+            the Prism server, and proxies messages between the client and the
+            server.
             Parameters:
                 request (aiohttp.web.Request): The incoming WebSocket request.
-                aiohttp.web.WebSocketResponse: The WebSocket response to the client.
+                aiohttp.web.WebSocketResponse: The WebSocket response to the
+                client.
 
 Functions:
     async clientAwait(request, client_ws, server_ws):
-        This coroutine listens for messages from the client WebSocket (e.g., noVNC/Browser) 
-        and processes them accordingly. Depending on the type of message received, it performs 
-        different actions such as sending messages to the server WebSocket, responding to ping/pong 
-        frames, or closing the connection.
-            client_ws (aiohttp.web.WebSocketResponse): The WebSocket connection to the client.
-            server_ws (aiohttp.ClientWebSocketResponse): The WebSocket connection to the server.
-            aiohttp.web.WebSocketResponse: The client WebSocket connection after processing.
+        This coroutine listens for messages from the client WebSocket (e.g.,
+        noVNC/Browser) and processes them accordingly. Depending on the type
+        of message received, it performs different actions such as sending
+        messages to the server WebSocket, responding to ping/pong frames, or
+        closing the connection.
+            client_ws (aiohttp.web.WebSocketResponse): The WebSocket connection
+                to the client.
+            server_ws (aiohttp.ClientWebSocketResponse): The WebSocket
+                connection to the server.
+            aiohttp.web.WebSocketResponse: The client WebSocket connection
+                after processing.
     async serverAwait(request, server_ws, client_ws):
-        This coroutine listens for messages from the server WebSocket (e.g., Prism) and forwards 
-        them to the client WebSocket (e.g., noVNC/Browser). It prepares the client WebSocket 
-        connection and processes messages until the server WebSocket connection is closed.
+        This coroutine listens for messages from the server WebSocket (e.g.,
+        Prism) and forwards them to the client WebSocket (e.g., noVNC/Browser).
+        It prepares the client WebSocket connection and processes messages
+        until the server WebSocket connection is closed.
 
 Logging:
   Logs information and errors to the console using the logging module.
@@ -52,6 +62,10 @@ import requests
 import ssl
 import websockets
 
+# Suppress only the single InsecureRequestWarning from urllib3 needed for this script
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
 log = logging.getLogger(__name__)
 
@@ -63,12 +77,28 @@ class WSGIPrismWebsocketProxy(object):
 
     def _get_session_cookie(self):
         """
-        Logs into Prism and obtains a session cookie.
+        Authenticates with the Prism server and retrieves the session cookie.
+
+        This method sends a POST request to the Prism server's authentication
+        endpoint using the provided username and password. If the
+        authentication is successful and a session cookie is received, the
+        method returns the session cookie in the format "JSESSIONID=<cookie_value>".
+        If authentication fails or no session cookie is received, the method
+        logs the appropriate error and returns None.
 
         Returns:
-        str: A cookie string (e.g., "JSESSIONID=..."), or None on failure.
+            str: The session cookie in the format "JSESSIONID=<cookie_value>"
+            if authentication is successful and a session cookie is received.
+            Otherwise, returns None.
+
+        Raises:
+            requests.exceptions.HTTPError: If an HTTP error occurs during the
+            authentication request.
+            requests.exceptions.RequestException: If a request exception occurs
+            during the authentication request.
         """
-        log.info("Authenticating with Prism")
+
+        log.info(f"Authenticating with Prism at {self._host} as user {self._user}")
         session = requests.Session()
         try:
             response = session.post(
@@ -101,12 +131,14 @@ class WSGIPrismWebsocketProxy(object):
     async def prism_websocket_handler(self, request):
         """
         Handles incoming WebSocket requests and proxies them to a VNC server.
+
         Args:
             request (aiohttp.web.Request): The incoming HTTP request.
+
         Returns:
             aiohttp.web.WebSocketResponse: The WebSocket response to be sent
-                back to the client.
-                
+            back to the client.
+
         The function performs the following steps:
         1. Extracts the VM UUID from the request.
         2. Constructs the VNC WebSocket URL using the extracted UUID.
@@ -118,7 +150,8 @@ class WSGIPrismWebsocketProxy(object):
         6. Waits for the tasks to complete and then closes the connection.
         
         Raises:
-            aiohttp.web.HTTPBadRequest: If the VM UUID is missing in the request.
+            aiohttp.web.HTTPBadRequest: If the VM UUID is missing in the
+                request.
             websockets.exceptions.InvalidURI: If the constructed WebSocket URI
                 is invalid.
             websockets.exceptions.InvalidHandshake: If the WebSocket handshake
@@ -221,6 +254,9 @@ async def clientAwait(request, client_ws, server_ws):
     Returns:
         aiohttp.web.WebSocketResponse: The client WebSocket connection after
             processing.
+
+    Raises:
+        Exception: If there is an error sending a message to the server.
     """
     log.debug("CLIENT SIDE PROCESSING")
     await client_ws.prepare(request)
@@ -237,7 +273,11 @@ async def clientAwait(request, client_ws, server_ws):
                 await server_ws.send(msg.data + '/answer')
         elif msg.type == aiohttp.WSMsgType.BINARY:
             log.debug("Received BINARY message")
-            await server_ws.send(msg.data)
+            try:
+                await server_ws.send(msg.data)
+            except Exception as e:
+                log.error(f"Error sending message to server: {e} with message: {msg.data}")
+                break
         elif msg.type == aiohttp.WSMsgType.PING:
             log.debug("Received PING message")
             await server_ws.ping()
@@ -270,6 +310,9 @@ async def serverAwait(request, server_ws, client_ws):
         
     Returns:
         None
+
+    Raises:
+        Exception: If there is an error sending a message to the client WebSocket.
     """
     log.debug("SERVER SIDE PROCESSING")
     await client_ws.prepare(request)
@@ -280,8 +323,16 @@ async def serverAwait(request, server_ws, client_ws):
     async for message in server_ws:
         log.debug(f"Forward to Client: {message}")
         if isinstance(message, str):
-            await client_ws.send_str(message)
+            try:
+                await client_ws.send_str(message)
+            except Exception as e:
+                log.error(f"Error sending message to client: {e} with message: {message}")
+                break
         else:
-            await client_ws.send_bytes(message)
+            try:
+                await client_ws.send_bytes(message)
+            except Exception as e:
+                log.error(f"Error sending message to client: {e} with message: {message}")
+                break
 
     log.debug('SERVER SIDE websocket connection closed')
