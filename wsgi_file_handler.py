@@ -39,7 +39,6 @@ import os
 logger = logging.getLogger(__name__)
 
 async def wsgi_file_handler(request):
-    
     """
     Handle an incoming HTTP request and serve a file.
     
@@ -57,23 +56,34 @@ async def wsgi_file_handler(request):
     
     Args:
         request (aiohttp.web.Request): The incoming HTTP request.
+        
     Returns:
         aiohttp.web.Response: The HTTP response containing the file content
         or an error message.
+        
+    Raises:
+        aiofiles.threadpool.AsyncFileIOError: If an asynchronous file I/O
+            error occurs.
+        aiohttp.web.HTTPException: If an HTTP-related exception occurs.
+        Exception: If any other unexpected error occurs.
     """
 
-    file_path = os.path.join('static', request.match_info.get('file_path', 'index.html'))
-    logger.debug(f"Received request for file: {file_path}")
+    try:
+        file_path = os.path.join('static', request.match_info.get('file_path', 'index.html'))
+        logger.debug(f"Received request for file: {file_path}")
 
-    if '..' in file_path or file_path.startswith('/'):
-        logger.warning(f"Attempt to access forbidden path: {file_path}")
-        return web.Response(status=403, text="Forbidden")
+        if '..' in file_path or file_path.startswith('/'):
+            logger.warning(f"Attempt to access forbidden path: {file_path}")
+            return web.Response(status=403, text="Forbidden")
 
-    if not os.path.isfile(file_path):
-        logger.warning(f"File not found: {file_path}")
-        return web.Response(status=404, text="File not found")
+        if not os.path.isfile(file_path):
+            logger.warning(f"File not found: {file_path}")
+            return web.Response(status=404, text="File not found")
 
-    logger.debug(f"Serving file: {file_path}")
+        logger.debug(f"Serving file: {file_path}")
+    except Exception as e:
+        logger.error(f"Exception occurred while processing the file path: {e}")
+        return web.Response(status=500, text="Internal server error")
 
     try:
         async with aiofiles.open(file_path, 'rb') as f:
@@ -89,6 +99,12 @@ async def wsgi_file_handler(request):
                 await response.write(chunk)
             await response.write_eof()
             return response
+    except aiofiles.threadpool.AsyncFileIOError as e:
+        logger.error(f"Async file I/O error reading file {file_path}: {e}")
+        return web.Response(status=500, text="Internal server error")
+    except aiohttp.web.HTTPException as e:
+        logger.error(f"HTTP exception occurred: {e}")
+        raise
     except Exception as e:
-        logger.error(f"Error reading file {file_path}: {e}")
+        logger.error(f"Unexpected error reading file {file_path}: {e}")
         return web.Response(status=500, text="Internal server error")
