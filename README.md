@@ -88,7 +88,4 @@ We welcome contributions to improve the Prism VNC Proxy. Please follow these gui
 3. Ensure your code adheres to the project's coding standards.
 4. Submit a pull request with a detailed description of your changes.
 
-## TODOs
-- Consider adding project unit tests via pytest, etc.
-
 For more detailed information, please refer to the source code and comments within the files.

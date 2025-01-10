@@ -53,7 +53,9 @@ from aiohttp import web
 from wsgi_file_handler import wsgi_file_handler
 from wsgi_prism_websocket_proxy import WSGIPrismWebsocketProxy
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s,%(msecs)03dZ [%(levelname)8s] (%(filename)s:%(lineno)s) %(message)s')
 log = logging.getLogger(__name__)
 
 

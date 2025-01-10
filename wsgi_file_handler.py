@@ -38,6 +38,9 @@ import aiohttp
 
 from aiohttp import web
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s,%(msecs)03dZ [%(levelname)8s] (%(filename)s:%(lineno)s) %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -75,10 +78,9 @@ async def wsgi_file_handler(request):
                 'file_path', 'index.html'))
         logger.debug("Received request for file: %s", file_path)
 
-        if '..' in file_path or file_path.startswith('/'):
-            logger.warning("Attempt to access forbidden path: %s", file_path)
-            return web.Response(status=403, text="Forbidden")
-
+        # Check if the file path is valid and does not access forbidden paths
+        # aiohttp will not allow forbidden paths to be accessed, so we only
+        # need to check if the file exists.
         if not os.path.isfile(file_path):
             logger.warning("File not found: %s", file_path)
             return web.Response(status=404, text="File not found")

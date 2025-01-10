@@ -56,6 +56,7 @@ Copyright:
 import asyncio
 import logging
 import ssl
+import uuid as uuid_lib
 
 import aiohttp
 import requests
@@ -71,7 +72,7 @@ urllib3.disable_warnings(InsecureRequestWarning)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
+    format='%(asctime)s,%(msecs)03dZ [%(levelname)8s] (%(filename)s:%(lineno)s) %(message)s')
 log = logging.getLogger(__name__)
 
 
@@ -170,23 +171,28 @@ class WSGIPrismWebsocketProxy:
 
         The function performs the following steps:
         1. Extracts the VM UUID from the request.
-        2. Constructs the VNC WebSocket URL using the extracted UUID.
-        3. Attempts to establish a WebSocket connection to the VNC server.
-        4. Handles various exceptions that may occur during the connection
-           process.
-        5. If the connection is successful, creates tasks to forward messages
+        2. Validates the VM UUID format.
+        3. Constructs the VNC WebSocket URL using the extracted UUID.
+        4. Attempts to establish a WebSocket connection to the VNC server.
+        5. Handles various exceptions that may occur during the connection
+            process.
+        6. If the connection is successful, creates tasks to forward messages
            between the client and server WebSocket connections.
-        6. Waits for the tasks to complete and then closes the connection.
+        7. Waits for the tasks to complete and then closes the connection.
 
         Raises:
+            aiohttp.ClientError: For any client-related errors.
             aiohttp.web.HTTPBadRequest: If the VM UUID is missing in the
                 request.
+            ssl.SSLError: For any SSL-related errors.
             websockets.exceptions.InvalidURI: If the constructed WebSocket URI
                 is invalid.
             websockets.exceptions.InvalidHandshake: If the WebSocket handshake
                 fails.
             websockets.exceptions.InvalidStatus: If the WebSocket connection is
                 rejected with an invalid status.
+            websockets.WebSocketException: For any other WebSocket-related
+                errors.
             Exception: For any other unexpected errors.
         """
         uuid = request.match_info.get('vm_uuid', None)
@@ -194,7 +200,15 @@ class WSGIPrismWebsocketProxy:
             log.error("VM UUID is missing in the request")
             return web.Response(status=400, text="VM UUID is required")
 
-        log.info("Received request for VM: %s", uuid)
+        try:
+            uuid_obj = uuid_lib.UUID(uuid, version=4)
+            if str(uuid_obj) != uuid:
+                raise ValueError
+        except ValueError:
+            log.error("Invalid VM UUID format: %s", uuid)
+            return web.Response(status=400, text="Invalid VM UUID format")
+
+        log.info("Received request for VM UUID: %s", uuid)
         vnc_rel_url = str(request.rel_url).replace("/proxy", "/vnc/vm", 1)
         vnc_rel_url += "/proxy"
         uri = f"wss://{self._host}:9440{vnc_rel_url}"
