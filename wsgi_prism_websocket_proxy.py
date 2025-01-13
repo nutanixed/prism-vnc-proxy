@@ -99,6 +99,7 @@ class WSGIPrismWebsocketProxy:
             Handles incoming WebSocket requests and proxies them to a VNC
             server.
     """
+
     def __init__(self, host, user, password):
         self._host = host
         self._user = user
@@ -196,17 +197,15 @@ class WSGIPrismWebsocketProxy:
             Exception: For any other unexpected errors.
         """
         uuid = request.match_info.get('vm_uuid', None)
-        if uuid is None:
-            log.error("VM UUID is missing in the request")
-            return web.Response(status=400, text="VM UUID is required")
 
         try:
-            uuid_obj = uuid_lib.UUID(uuid, version=4)
-            if str(uuid_obj) != uuid:
-                raise ValueError
+            uuid_lib.UUID(uuid, version=4)
         except ValueError:
             log.error("Invalid VM UUID format: %s", uuid)
             return web.Response(status=400, text="Invalid VM UUID format")
+        except TypeError:
+            log.error("The provided VM UUID not a string or None: %s", uuid)
+            return web.Response(status=400, text="VM UUID is required")
 
         log.info("Received request for VM UUID: %s", uuid)
         vnc_rel_url = str(request.rel_url).replace("/proxy", "/vnc/vm", 1)
@@ -272,8 +271,10 @@ class WSGIPrismWebsocketProxy:
         #   - A connection open to prism (server_ws)
         # Now this is time to glue them together to pass messages.
         # We will create two tasks:
-        client_task = asyncio.create_task(client_await(request, client_ws, server_ws))
-        server_task = asyncio.create_task(server_await(request, server_ws, client_ws))
+        client_task = asyncio.create_task(
+            client_await(request, client_ws, server_ws))
+        server_task = asyncio.create_task(
+            server_await(request, server_ws, client_ws))
 
         await client_task
         await server_task

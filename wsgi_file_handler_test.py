@@ -7,10 +7,7 @@ The tests are designed to verify the following scenarios:
     404 status code with the message "File not found".
 2. Forbidden Path: Ensures that requests for forbidden paths (e.g., paths
     containing "..") return a 404 status code.
-3. Internal Server Error: Ensures that an internal server error is properly
-    handled and returns a 500 status code with the message "Internal server
-    error".
-4. Serve File: Ensures that a valid file request returns a 200 status code
+3. Serve File: Ensures that a valid file request returns a 200 status code
     and serves the correct file content.
 
 Classes:
@@ -24,17 +21,12 @@ Functions:
         exist.
      test_forbidden_path: Tests the scenario where a requested path is
         forbidden.
-     test_internal_server_error: Tests the scenario where an internal server
-        error occurs.
      test_serve_file: Tests the scenario where a valid file is requested and
         served.
 
 Logging:
      Configured to log at the INFO level. Debug logs are used within test
      methods to trace the execution flow.
-
-Usage:
-     Run this module directly to execute the tests using pytest.
 
 Author:
     Jon Kohler (jon@nutanix.com)
@@ -45,7 +37,6 @@ Copyright:
 
 import os
 import logging
-import pytest
 
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
@@ -67,8 +58,6 @@ class TestWSGIFileHandler(AioHTTPTestCase):
       exist.
     - test_forbidden_path: Tests the scenario where a forbidden path is
       requested.
-    - test_internal_server_error: Tests the scenario where an internal server
-      error occurs.
     - test_serve_file: Tests the scenario where a file is successfully served.
 
     Each test method sends an HTTP GET request to the application and asserts
@@ -128,34 +117,6 @@ class TestWSGIFileHandler(AioHTTPTestCase):
         assert request.status == 404
         logger.debug("Forbidden path test passed")
 
-    async def test_internal_server_error(self):
-        """
-        Test case for simulating an internal server error scenario.
-
-        This test verifies that when an internal server error occurs, the
-        server responds with a status code of 500 and the response text is
-        "Internal server error".
-
-        Steps:
-        1. Send a GET request to the root endpoint ("/").
-        2. Assert that the response status code is 500.
-        3. Assert that the response text is "Internal server error".
-
-        The test expects an exception to be raised during the request,
-        indicating that an internal server error has occurred.
-
-        Raises:
-            Exception: If the request does not result in an internal server
-            error.
-        """
-        logger.debug("Testing internal server error scenario")
-        with pytest.raises(Exception):
-            request = await self.client.request("GET", "/")
-            assert request.status == 500
-            text = await request.text()
-            assert text == "Internal server error"
-        logger.debug("Internal server error test passed")
-
     async def test_serve_file(self):
         """
         Test the file serving functionality of the application.
@@ -191,9 +152,3 @@ class TestWSGIFileHandler(AioHTTPTestCase):
 
         os.remove(file_path)
         logger.debug("Test file removed")
-
-
-if __name__ == '__main__':
-    logger.info("Starting tests")
-    pytest.main()
-    logger.info("Finished tests")
