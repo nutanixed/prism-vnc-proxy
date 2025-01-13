@@ -8,6 +8,8 @@ Tests included:
 - `test_parse_opts_missing_required`: Ensures that `parse_opts` raises a
     SystemExit when required arguments are missing.
 - `test_main`: Tests the `main` function of the `prism_vnc_proxy` module.
+- `test_main_opts_none`: Ensures that the `main` function returns 1 when
+    options parsing fails.
 
 Logging:
     Logging is configured to output debug information to assist in tracing the
@@ -122,3 +124,25 @@ async def test_main(monkeypatch):
     logger.debug("Main function result: %d", result)
     assert result == 0
     logger.debug("Finished test_main")
+
+
+def test_main_opts_none(monkeypatch):
+    """
+    Test the main function to ensure it returns 1 when options parsing fails.
+
+    This test uses the monkeypatch fixture to modify the parse_opts function
+    to return None, simulating a failure in options parsing.
+
+    Args:
+        monkeypatch: A pytest fixture that allows modifying or simulating
+                     attributes and functions.
+
+    Assertions:
+        Asserts that the main function returns 1.
+    """
+    logger.debug("Starting test_main_opts_none")
+    monkeypatch.setattr('prism_vnc_proxy.parse_opts', lambda: None)
+    result = main()
+    logger.debug("Main function result when opts is None: %d", result)
+    assert result == 1
+    logger.debug("Finished test_main_opts_none")

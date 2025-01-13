@@ -107,6 +107,33 @@ async def test_prism_websocket_handler_missing_uuid(proxy):
 
 
 @pytest.mark.asyncio
+async def test_prism_websocket_handler_invalid_vm_uuid(proxy):
+    """
+    Test the `prism_websocket_handler` method of the proxy with an invalid VM
+    UUID.
+
+    This test ensures that the `prism_websocket_handler` method correctly
+    handles the case where an invalid VM UUID is provided. It verifies that
+    an HTTPBadRequest exception is raised.
+
+    Args:
+        proxy: The proxy instance being tested.
+
+    Assertions:
+        - The response status code should be 400.
+        - The response text should indicate that the VM UUID format is
+          invalid.
+    """
+    logger.debug("Starting test_prism_websocket_handler_invalid_vm_uuid")
+    request = MagicMock()
+    request.match_info.get.return_value = "invalid-uuid"
+    response = await proxy.prism_websocket_handler(request)
+    assert response.status == 400
+    assert response.text == "Invalid VM UUID format"
+    logger.debug("Completed test_prism_websocket_handler_invalid_vm_uuid")
+
+
+@pytest.mark.asyncio
 async def test_prism_websocket_handler_no_session_cookie(proxy, uuid4):
     """
     Test the `prism_websocket_handler` method of the `proxy` object when

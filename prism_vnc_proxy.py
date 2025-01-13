@@ -119,6 +119,7 @@ def main():
     """
     opts = parse_opts()
     if opts is None:
+        log.error("Failed to parse command line options")
         return 1
 
     # Configure the prism websocket handler. Local requests to /proxy/<vm_uuid>

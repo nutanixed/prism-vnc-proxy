@@ -32,6 +32,7 @@ Copyright:
 import logging
 import mimetypes
 import os
+from urllib.parse import unquote
 
 import aiofiles
 import aiohttp
@@ -44,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def wsgi_file_handler(request):
+async def wsgi_file_handler(request: web.Request) -> web.Response:
     """
     Handle an incoming HTTP request and serve a file.
 
@@ -64,8 +65,7 @@ async def wsgi_file_handler(request):
         request (aiohttp.web.Request): The incoming HTTP request.
 
     Returns:
-        aiohttp.web.Response: The HTTP response containing the file content
-        or an error message.
+        aiohttp.web.Response: The HTTP response object.
 
     Raises:
         aiohttp.web.HTTPException: If an HTTP-related exception occurs.
@@ -74,25 +74,37 @@ async def wsgi_file_handler(request):
 
     try:
         file_path = os.path.join(
-            'static', request.match_info.get(
-                'file_path', 'index.html'))
+            'static', unquote(request.match_info.get(
+                'file_path', 'index.html')))
         logger.debug("Received request for file: %s", file_path)
 
         # Check if the file path is valid and does not access forbidden paths
-        # aiohttp will not allow forbidden paths to be accessed, so we only
-        # need to check if the file exists.
+        # Note: aiohttp *should not* allow forbidden paths to be accessed;
+        # do a simple sanity check to harden this path.
+        base_path = os.path.abspath('static')
+        requested_path = os.path.abspath(file_path)
+        if not requested_path.startswith(base_path):
+            logger.warning(
+                "Attempted directory traversal attack: %s",
+                file_path)
+            return web.Response(status=403, text="Forbidden")
+
         if not os.path.isfile(file_path):
             logger.warning("File not found: %s", file_path)
             return web.Response(status=404, text="File not found")
 
-        logger.debug("Serving file: %s", file_path)
+        logger.debug("Attempting to serve file: %s", file_path)
     except (OSError, ValueError) as e:
-        logger.error("Exception occurred while processing the file path: %s", e)
+        logger.error(
+            "Exception occurred while processing the file path: %s", e)
         return web.Response(status=500, text="Internal server error")
 
     try:
+        # Dynamic chunk size based on file size
+        file_size = os.path.getsize(file_path)
+        chunk_size = min(max(file_size // 100, 1024), 8192)
+
         async with aiofiles.open(file_path, 'rb') as f:
-            chunk_size = 8192
             response = web.StreamResponse(
                 headers={'Content-Type': mimetypes.guess_type(file_path)[0] or
                          'application/octet-stream'})
@@ -103,6 +115,10 @@ async def wsgi_file_handler(request):
                     break
                 await response.write(chunk)
             await response.write_eof()
+            logger.info(
+                "Successfully served file: %s to %s",
+                file_path,
+                request.remote)
             return response
     except aiohttp.web.HTTPException as e:
         logger.error("HTTP exception occurred: %s", e)
