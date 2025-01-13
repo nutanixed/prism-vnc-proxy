@@ -25,7 +25,7 @@ WSGIPrismWebsocketProxy:
                 client.
 
 Functions:
-    async clientAwait(request, client_ws, server_ws):
+    async client_await(request, client_ws, server_ws):
         This coroutine listens for messages from the client WebSocket (e.g.,
         noVNC/Browser) and processes them accordingly. Depending on the type
         of message received, it performs different actions such as sending
@@ -37,7 +37,7 @@ Functions:
                 connection to the server.
             aiohttp.web.WebSocketResponse: The client WebSocket connection
                 after processing.
-    async serverAwait(request, server_ws, client_ws):
+    async server_await(request, server_ws, client_ws):
         This coroutine listens for messages from the server WebSocket (e.g.,
         Prism) and forwards them to the client WebSocket (e.g., noVNC/Browser).
         It prepares the client WebSocket connection and processes messages
@@ -53,27 +53,52 @@ Copyright:
     (c) 2025 Nutanix Inc. All rights reserved.
 """
 
-from aiohttp import web
-
-import aiohttp
 import asyncio
 import logging
-import requests
 import ssl
+import uuid as uuid_lib
+
+import aiohttp
+import requests
+import urllib3
 import websockets
+
+from aiohttp import web
 
 # Suppress only the single InsecureRequestWarning from urllib3 needed for
 # this script
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+from urllib3.exceptions import InsecureRequestWarning
+urllib3.disable_warnings(InsecureRequestWarning)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
+    format='%(asctime)s,%(msecs)03dZ [%(levelname)8s] (%(filename)s:%(lineno)s) %(message)s')
 log = logging.getLogger(__name__)
 
 
-class WSGIPrismWebsocketProxy(object):
+class WSGIPrismWebsocketProxy:
+    """
+    WSGIPrismWebsocketProxy is a class that handles WebSocket proxying between
+    a client and a VNC server through a Prism server.
+
+    Attributes:
+        _host (str): The hostname or IP address of the Prism server.
+        _user (str): The username for authentication with the Prism server.
+        _password (str): The password for authentication with the Prism server.
+
+    Methods:
+        __init__(host, user, password):
+            Initializes the WSGIPrismWebsocketProxy with the given host, user,
+            and password.
+
+        _get_session_cookie():
+            Authenticates with the Prism server and retrieves the session
+            cookie.
+
+        async prism_websocket_handler(request):
+            Handles incoming WebSocket requests and proxies them to a VNC
+            server.
+    """
     def __init__(self, host, user, password):
         self._host = host
         self._user = user
@@ -103,11 +128,11 @@ class WSGIPrismWebsocketProxy(object):
         """
 
         log.info(
-            f"Authenticating with Prism at {self._host} as user {self._user}")
+            "Authenticating with Prism at %s as user %s", self._host, self._user)
         session = requests.Session()
         try:
             response = session.post(
-                "https://%s:9440/PrismGateway/j_spring_security_check" % self._host,
+                f"https://{self._host}:9440/PrismGateway/j_spring_security_check",
                 data={
                     "j_username": self._user,
                     "j_password": self._password,
@@ -119,15 +144,15 @@ class WSGIPrismWebsocketProxy(object):
             if response.status_code == 401:
                 log.error("Prism Unauthorized: Invalid username or password")
             else:
-                log.error("Prism HTTP error occurred: %s" % (e,))
+                log.error("Prism HTTP error occurred: %s", e)
             return None
         except requests.exceptions.RequestException as e:
-            log.error("Failed to connect to Prism: %s" % (e,))
+            log.error("Failed to connect to Prism: %s", e)
             return None
 
         if "JSESSIONID" not in session.cookies:
-            log.debug(f"Response headers: {response.headers}")
-            log.debug(f"Session Cookies received: {session.cookies}")
+            log.debug("Response headers: %s", response.headers)
+            log.debug("Session Cookies received: %s", session.cookies)
             log.error("Authentication with Prism successful, but no JSESSIONID")
             return None
 
@@ -146,23 +171,28 @@ class WSGIPrismWebsocketProxy(object):
 
         The function performs the following steps:
         1. Extracts the VM UUID from the request.
-        2. Constructs the VNC WebSocket URL using the extracted UUID.
-        3. Attempts to establish a WebSocket connection to the VNC server.
-        4. Handles various exceptions that may occur during the connection
-           process.
-        5. If the connection is successful, creates tasks to forward messages
+        2. Validates the VM UUID format.
+        3. Constructs the VNC WebSocket URL using the extracted UUID.
+        4. Attempts to establish a WebSocket connection to the VNC server.
+        5. Handles various exceptions that may occur during the connection
+            process.
+        6. If the connection is successful, creates tasks to forward messages
            between the client and server WebSocket connections.
-        6. Waits for the tasks to complete and then closes the connection.
+        7. Waits for the tasks to complete and then closes the connection.
 
         Raises:
+            aiohttp.ClientError: For any client-related errors.
             aiohttp.web.HTTPBadRequest: If the VM UUID is missing in the
                 request.
+            ssl.SSLError: For any SSL-related errors.
             websockets.exceptions.InvalidURI: If the constructed WebSocket URI
                 is invalid.
             websockets.exceptions.InvalidHandshake: If the WebSocket handshake
                 fails.
             websockets.exceptions.InvalidStatus: If the WebSocket connection is
                 rejected with an invalid status.
+            websockets.WebSocketException: For any other WebSocket-related
+                errors.
             Exception: For any other unexpected errors.
         """
         uuid = request.match_info.get('vm_uuid', None)
@@ -170,10 +200,18 @@ class WSGIPrismWebsocketProxy(object):
             log.error("VM UUID is missing in the request")
             return web.Response(status=400, text="VM UUID is required")
 
-        log.info(f"Received request for VM: {uuid}")
+        try:
+            uuid_obj = uuid_lib.UUID(uuid, version=4)
+            if str(uuid_obj) != uuid:
+                raise ValueError
+        except ValueError:
+            log.error("Invalid VM UUID format: %s", uuid)
+            return web.Response(status=400, text="Invalid VM UUID format")
+
+        log.info("Received request for VM UUID: %s", uuid)
         vnc_rel_url = str(request.rel_url).replace("/proxy", "/vnc/vm", 1)
         vnc_rel_url += "/proxy"
-        uri = "wss://%s:9440%s" % (self._host, vnc_rel_url)
+        uri = f"wss://{self._host}:9440{vnc_rel_url}"
 
         client_ws = web.WebSocketResponse(protocols="binary")
         cookie = self._get_session_cookie()
@@ -182,68 +220,69 @@ class WSGIPrismWebsocketProxy(object):
             await client_ws.prepare(request)
             await client_ws.close()
             return client_ws
-        log.info(f"New connection: {uri}")
+
+        log.info("New connection: %s", uri)
         headers = {
-            "Cookie": "%s" % cookie
+            "Cookie": f"{cookie}"
         }
 
         try:
             try:
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
                 server_ws = await websockets.connect(
                     uri,
                     additional_headers=headers,
-                    ssl=ssl._create_unverified_context())
+                    ssl=ssl_context)
             except websockets.exceptions.InvalidHandshake as e:
                 log.warning(
-                    f"Invalid Handshake on first attempt: {e}. Retrying...")
+                    "Invalid Handshake on first attempt: %s. Retrying...", e)
                 await asyncio.sleep(1)  # Wait a bit before retrying
                 server_ws = await websockets.connect(
                     uri,
                     additional_headers=headers,
-                    ssl=ssl._create_unverified_context())
+                    ssl=ssl_context)
         except websockets.exceptions.InvalidURI as e:
-            log.error(f"Invalid URI: {e}")
-            await client_ws.prepare(request)
-            await client_ws.close()
-            return client_ws
-        except websockets.exceptions.InvalidHandshake as e:
-            log.error(f"Invalid Handshake: {e}")
+            log.error("Invalid URI: %s", e)
             await client_ws.prepare(request)
             await client_ws.close()
             return client_ws
         except websockets.exceptions.InvalidStatus as e:
-            if e.status_code == 401:
-                log.error(
-                    "Server rejected WebSocket connection: HTTP 401 Unauthorized")
-            else:
-                log.error(f"Invalid Status: {e}")
-
+            log.error("Invalid Status: %s", e)
             await client_ws.prepare(request)
             await client_ws.close()
             return client_ws
-        except Exception as e:
-            log.error(f"Unexpected error: {e}")
+        except websockets.exceptions.InvalidHandshake as e:
+            log.error("Invalid Handshake: %s", e)
+            await client_ws.prepare(request)
+            await client_ws.close()
+            return client_ws
+        except (aiohttp.ClientError,
+                websockets.WebSocketException,
+                ssl.SSLError) as e:
+            log.error("WebSocket or SSL error: %s", e)
             await client_ws.prepare(request)
             await client_ws.close()
             return client_ws
 
         # At this point, we have the following:
         #   - A valid websocket request (request)
-        #   - A connection open from the browswer (client_ws)
+        #   - A connection open from the browser (client_ws)
         #   - A connection open to prism (server_ws)
         # Now this is time to glue them together to pass messages.
         # We will create two tasks:
-        taskA = asyncio.create_task(clientAwait(request, client_ws, server_ws))
-        taskB = asyncio.create_task(serverAwait(request, server_ws, client_ws))
+        client_task = asyncio.create_task(client_await(request, client_ws, server_ws))
+        server_task = asyncio.create_task(server_await(request, server_ws, client_ws))
 
-        await taskA
-        await taskB
+        await client_task
+        await server_task
         log.info("Connection closed")
 
         return client_ws
 
 
-async def clientAwait(request, client_ws, server_ws):
+async def client_await(request, client_ws, server_ws):
     """
     Handles the client side of the WebSocket proxy.
     This coroutine listens for messages from the client WebSocket (e.g.,
@@ -283,9 +322,9 @@ async def clientAwait(request, client_ws, server_ws):
             log.debug("Received BINARY message")
             try:
                 await server_ws.send(msg.data)
-            except Exception as e:
+            except (aiohttp.ClientError, websockets.WebSocketException) as e:
                 log.error(
-                    f"Error sending message to server: {e} with message: {msg.data}")
+                    "Error sending message to server: %s with message: %s", e, msg.data)
                 break
         elif msg.type == aiohttp.WSMsgType.PING:
             log.debug("Received PING message")
@@ -297,7 +336,7 @@ async def clientAwait(request, client_ws, server_ws):
             log.debug("Received CLOSE message")
             await client_ws.close()
         elif msg.type == aiohttp.WSMsgType.ERROR:
-            log.error('ws connection closed with exception %s' %
+            log.error('ws connection closed with exception %s',
                       client_ws.exception())
 
     log.debug('CLIENT SIDE websocket connection closed')
@@ -305,7 +344,7 @@ async def clientAwait(request, client_ws, server_ws):
     return client_ws
 
 
-async def serverAwait(request, server_ws, client_ws):
+async def server_await(request, server_ws, client_ws):
     """
     Handles the server side of the WebSocket proxy.
     This coroutine listens for messages from the server WebSocket (e.g., Prism)
@@ -331,20 +370,24 @@ async def serverAwait(request, server_ws, client_ws):
     # the proxy (e.g. prism) and then send them along to the client
     # (noVNC/Browser)
     async for message in server_ws:
-        log.debug(f"Forward to Client: {message}")
+        log.debug("Forward to Client: %s", message)
         if isinstance(message, str):
             try:
                 await client_ws.send_str(message)
-            except Exception as e:
+            except (aiohttp.WSServerHandshakeError,
+                    aiohttp.ClientError,
+                    websockets.WebSocketException) as e:
                 log.error(
-                    f"Error sending message to client: {e} with message: {message}")
+                    "Error sending message to client: %s with message: %s", e, message)
                 break
         else:
             try:
                 await client_ws.send_bytes(message)
-            except Exception as e:
+            except (aiohttp.WSServerHandshakeError,
+                    aiohttp.ClientError,
+                    websockets.WebSocketException) as e:
                 log.error(
-                    f"Error sending message to client: {e} with message: {message}")
+                    "Error sending message to client: %s with message: %s", e, message)
                 break
 
     log.debug('SERVER SIDE websocket connection closed')

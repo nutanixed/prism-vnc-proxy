@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-demo-ws-proxy.py
+demo_ws_proxy.py
 
 This script implements a WebSocket proxy server that forwards messages between
 a client and a remote WebSocket server.
@@ -13,9 +13,9 @@ remote server are forwarded to the client.
 
 Functions:
     proxy_connection(websocket): Handles new connections to the proxy server.
-    clientToServer(ws, websocket): Forwards messages from the client to the
+    client_to_server(ws, websocket): Forwards messages from the client to the
         remote server.
-    serverToClient(ws, websocket): Forwards messages from the remote server to
+    server_to_client(ws, websocket): Forwards messages from the remote server to
         the client.
     main(): Starts the WebSocket proxy server.
 
@@ -23,7 +23,7 @@ Usage:
     Run the script with optional arguments to specify the host, port, and
     remote WebSocket URL.
 
-    Example: python demo-ws-proxy.py --host localhost --port 9998 --remote_url ws://localhost:9999
+    Example: python demo_ws_proxy.py --host localhost --port 9998 --remote_url ws://localhost:9999
 
 Arguments:
     --host: Host to bind to (default: 'localhost').
@@ -51,6 +51,9 @@ import websockets
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s [%(funcName)s]: %(message)s')
 log = logging.getLogger(__name__)
+
+REMOTE_URL = None
+ARGS = None
 
 
 async def proxy_connection(client_ws):
@@ -82,27 +85,27 @@ async def proxy_connection(client_ws):
     """
 
     url = REMOTE_URL
-    log.info(f"New connection: {url}")
+    log.info("New connection: %s", url)
     try:
         async with websockets.connect(url) as server_ws:
             log.info("Connected to remote websocket")
-            taskA = asyncio.create_task(clientToServer(server_ws, client_ws))
-            taskB = asyncio.create_task(serverToClient(server_ws, client_ws))
+            task_client_to_server = asyncio.create_task(client_to_server(server_ws, client_ws))
+            task_server_to_client = asyncio.create_task(server_to_client(server_ws, client_ws))
 
-            await taskA
-            await taskB
+            await task_client_to_server
+            await task_server_to_client
             log.info("Connection closed")
     except websockets.exceptions.InvalidURI as e:
-        log.error(f"Invalid URI: {e}")
+        log.error("Invalid URI: %s", e)
     except websockets.exceptions.InvalidHandshake as e:
-        log.error(f"Invalid Handshake: {e}")
+        log.error("Invalid Handshake: %s", e)
     except websockets.exceptions.ConnectionClosedError as e:
-        log.error(f"Connection closed with error: {e}")
+        log.error("Connection closed with error: %s", e)
     except Exception as e:
-        log.error(f"Unexpected error: {e}")
+        log.error("Unexpected error: %s", e)
 
 
-async def serverToClient(server_ws, client_ws):
+async def server_to_client(server_ws, client_ws):
     """
     Handles the communication from the server WebSocket to the client
     WebSocket.
@@ -127,15 +130,15 @@ async def serverToClient(server_ws, client_ws):
 
     try:
         async for message in server_ws:
-            log.info(f"Server to Client: {message}")
+            log.info("Server to Client: %s", message)
             await client_ws.send(message)
     except websockets.exceptions.ConnectionClosedOK:
-        log.info("Connection closed normally in serverToClient")
+        log.info("Connection closed normally in server_to_client")
     except Exception as e:
-        log.error(f"Error in serverToClient: {e}")
+        log.error("Error in server_to_client: %s", e)
 
 
-async def clientToServer(server_ws, client_ws):
+async def client_to_server(server_ws, client_ws):
     """
     Handles the communication from the client WebSocket to the server
     WebSocket.
@@ -161,12 +164,12 @@ async def clientToServer(server_ws, client_ws):
 
     try:
         async for message in client_ws:
-            log.info(f"Client to Server: {message}")
+            log.info("Client to Server: %s", message)
             await server_ws.send(message)
     except websockets.exceptions.ConnectionClosedOK:
-        log.info("Connection closed normally in clientToServer")
+        log.info("Connection closed normally in client_to_server")
     except Exception as e:
-        log.error(f"Error in clientToServer: {e}")
+        log.error("Error in client_to_server: %s", e)
 
 
 async def main():
@@ -189,7 +192,7 @@ async def main():
     """
 
     start_server = await websockets.serve(
-        proxy_connection, args.host, args.port, logger=log
+        proxy_connection, ARGS.host, ARGS.port, logger=log
     )
     await start_server.wait_closed()
 
@@ -201,8 +204,8 @@ if __name__ == '__main__':
                         default=9998)
     parser.add_argument('--remote_url', help='Remote websocket url',
                         default='ws://localhost:9999')
-    args = parser.parse_args()
+    ARGS = parser.parse_args()
 
-    REMOTE_URL = args.remote_url
+    REMOTE_URL = ARGS.remote_url
 
     asyncio.run(main())
