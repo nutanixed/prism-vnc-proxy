@@ -4,7 +4,7 @@ This project provides a small HTTP proxy and frontend for VM VNC WebSockets. It 
 
 ## Features
 - Proxies WebSocket traffic to the VNC server for specified VM UUIDs.
-- Provides a frontend UI for VNC WebSockets, using noNVC to connect to `aiohttp`
+- Provides a frontend UI for VNC WebSockets, using noNVC to connect to `aiohttp`asdf
 - Handles authentication with Prism and establishes WebSocket connections between clients and the Prism server.
 - Serves static content, which is noVNC and jquery.
 
