@@ -1,9 +1,4 @@
-#asyncio
-#aiofiles
-#aiohttp
-#requests
-#websockets
-
+aiofiles>=23.2.1
 aiohttp>=3.8.0
 websockets>=10.0
 requests>=2.28.0
