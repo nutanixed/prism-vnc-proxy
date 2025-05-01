@@ -1,5 +1,5 @@
-aiofiles>=23.2.1
-aiohttp>=3.8.0
-websockets>=10.0
-requests>=2.28.0
-urllib3>=1.26.0
+aiofiles
+aiohttp
+websockets
+requests
+urllib3
