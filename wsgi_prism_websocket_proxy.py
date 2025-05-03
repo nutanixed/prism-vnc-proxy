@@ -3,7 +3,7 @@
 """
 wsgi_prism_websocket_proxy.py
 
-This module provides a WSGI application for proxying WebSocket connections to
+WSGI application for proxying WebSocket connections to
 Prism Element or Prism Central VNC services.
 """
 
@@ -11,6 +11,7 @@ import asyncio
 import logging
 import ssl
 import uuid as uuid_lib
+from typing import Optional, Tuple
 
 import aiohttp
 import requests
@@ -30,84 +31,87 @@ log = logging.getLogger(__name__)
 
 
 class WSGIPrismWebsocketProxy:
-    """
-    Proxy VNC WebSocket connections through Prism Element or Prism Central.
-    """
+    """Proxy VNC WebSocket connections via Prism Element or Prism Central."""
 
-    def __init__(self, host, user, password, use_pc=False):
+    def __init__(self, host: str, user: str, password: str, use_pc: bool = False):
         self._host = host
         self._user = user
         self._password = password
         self._use_prism_central = use_pc
 
-    def _get_session_cookie(self):
+    def _get_session_cookie(self) -> Optional[str]:
+        """Authenticate with Prism Element and return the session cookie."""
         log.info("Authenticating with Prism Element at %s as user %s", self._host, self._user)
         session = requests.Session()
         try:
-            resp = session.post(
+            response = session.post(
                 f"https://{self._host}:9440/PrismGateway/j_spring_security_check",
                 data={"j_username": self._user, "j_password": self._password},
                 verify=False,
                 timeout=5
             )
-            resp.raise_for_status()
+            response.raise_for_status()
+            jsess = session.cookies.get("JSESSIONID")
+            if not jsess:
+                log.error("No JSESSIONID cookie received after authentication")
+                return None
+            return f"JSESSIONID={jsess}"
         except requests.RequestException as e:
-            log.error("Prism Element auth failed: %s", e)
+            log.error("Prism Element authentication failed: %s", e)
             return None
 
-        jsess = session.cookies.get("JSESSIONID")
-        if not jsess:
-            log.error("No JSESSIONID cookie after auth")
-            return None
-        return f"JSESSIONID={jsess}"
-
-    def _get_pc_session_cookie_and_cluster(self, vm_uuid):
+    def _get_pc_session_cookie_and_cluster(self, vm_uuid: str) -> Tuple[Optional[str], Optional[str]]:
+        """Authenticate with Prism Central and fetch the VM's cluster UUID."""
         log.info("Authenticating with Prism Central at %s as user %s", self._host, self._user)
         session = requests.Session()
         session.verify = False
         try:
-            resp = session.post(
+            clusters_resp = session.post(
                 f"https://{self._host}:9440/api/nutanix/v3/clusters/list",
                 auth=(self._user, self._password),
                 json={},
                 headers={"Content-Type": "application/json"},
                 timeout=10
             )
-            resp.raise_for_status()
+            clusters_resp.raise_for_status()
         except requests.RequestException as e:
-            log.error("Prism Central auth failed: %s", e)
+            log.error("Prism Central authentication failed: %s", e)
             return None, None
 
         cookies = session.cookies.get_dict()
-        parts = []
-        for key in ['NTNX_IGW_SESSION', 'NTNX_IAM_SESSION', 'NTNX_MERCURY_IAM_SESSION']:
-            if key in cookies:
-                parts.append(f"{key}={cookies[key]}")
-        if not parts:
+        cookie_parts = [
+            f"{key}={cookies[key]}"
+            for key in ['NTNX_IGW_SESSION', 'NTNX_IAM_SESSION', 'NTNX_MERCURY_IAM_SESSION']
+            if key in cookies
+        ]
+
+        if not cookie_parts:
             log.error("No Prism Central session cookies found")
             return None, None
-        cookie_header = "; ".join(parts)
+
+        cookie_header = "; ".join(cookie_parts)
 
         try:
             vm_url = f"https://{self._host}:9440/api/nutanix/v3/vms/{vm_uuid}"
             vm_resp = session.get(vm_url, headers={"Content-Type": "application/json"}, timeout=5)
             vm_resp.raise_for_status()
             cluster_uuid = vm_resp.json()["status"]["cluster_reference"]["uuid"]
+            return cookie_header, cluster_uuid
         except Exception as e:
             log.error("Failed to fetch VM cluster UUID: %s", e)
             return None, None
 
-        return cookie_header, cluster_uuid
-
-    async def prism_websocket_handler(self, request):
+    async def prism_websocket_handler(self, request: web.Request) -> web.WebSocketResponse:
+        """Handle incoming WebSocket requests and proxy them to Prism."""
         vm_uuid = request.match_info.get('vm_uuid')
         try:
             uuid_lib.UUID(vm_uuid, version=4)
-        except Exception:
+        except ValueError:
             log.error("Invalid VM UUID: %s", vm_uuid)
             return web.Response(status=400, text="Invalid VM UUID")
 
         log.info("Received request for VM UUID: %s", vm_uuid)
+
         client_ws = web.WebSocketResponse(protocols=('binary',))
         await client_ws.prepare(request)
 
@@ -118,16 +122,16 @@ class WSGIPrismWebsocketProxy:
             cluster_uuid = None
 
         if not cookie:
-            log.error("Authentication failed, closing client WS")
+            log.error("Authentication failed, closing client WebSocket")
             await client_ws.close()
             return client_ws
 
+        vnc_path = f"/vnc/vm/{vm_uuid}/proxy"
         if cluster_uuid:
-            vnc_path = f"/vnc/vm/{vm_uuid}/proxy?proxyClusterUuid={cluster_uuid}"
-        else:
-            vnc_path = f"/vnc/vm/{vm_uuid}/proxy"
+            vnc_path += f"?proxyClusterUuid={cluster_uuid}"
         uri = f"wss://{self._host}:9440{vnc_path}"
-        log.info("Connecting to backend WS: %s", uri)
+
+        log.info("Connecting to backend WebSocket: %s", uri)
 
         ssl_ctx = ssl.create_default_context()
         ssl_ctx.check_hostname = False
@@ -143,11 +147,11 @@ class WSGIPrismWebsocketProxy:
                     protocols=('binary',)
                 )
             except Exception as e:
-                log.error("Backend WS connection failed: %s", e)
+                log.error("Backend WebSocket connection failed: %s", e)
                 await client_ws.close()
                 return client_ws
 
-            async def _proxy(src, dst):
+            async def _proxy(src: web.WebSocketResponse, dst: web.WebSocketResponse):
                 async for msg in src:
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         await dst.send_str(msg.data)
@@ -162,21 +166,5 @@ class WSGIPrismWebsocketProxy:
                 _proxy(server_ws, client_ws)
             )
 
-        log.info("WebSocket proxy closed for %s", vm_uuid)
+        log.info("WebSocket proxy closed for VM UUID: %s", vm_uuid)
         return client_ws
-
-
-def init_app():
-    app = web.Application()
-    proxy = WSGIPrismWebsocketProxy(
-        host="10.142.151.33",
-        user="admin",
-        password="<password>",
-        use_pc=True
-    )
-    app.router.add_get('/proxy/{vm_uuid}', proxy.prism_websocket_handler)
-    return app
-
-
-if __name__ == '__main__':
-    web.run_app(init_app(), host='0.0.0.0', port=8080)
