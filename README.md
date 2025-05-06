@@ -93,8 +93,8 @@ sudo netstat -an | grep <bind_port>
 ```
 Example:
 ```sh
-$ sudo netstat -an | grep 8098
-tcp        0      0 0.0.0.0:8098            0.0.0.0:*               LISTEN
+$ sudo netstat -an | grep 8080
+tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN
 ```
 
 ### Access Resources
