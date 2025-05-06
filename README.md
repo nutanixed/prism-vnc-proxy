@@ -34,11 +34,11 @@ The proxy can be run from Python like so:
 
 HTTP
 ```sh
-python3 /opt/prism-vnc-proxy/prism_vnc_proxy.py --prism_hostname=1.2.3.4 --prism_username=PC_USERNAME --prism_password=PC_PASSWORD --bind_port=8080 --use_pc'
+python3 /opt/prism-vnc-proxy/prism_vnc_proxy.py --prism_hostname=YOUR_PRISM_HOSTNAME --prism_username=YOUR_PRISM_USERNAME --prism_password=YOUR_PRISM_PASSWORD --bind_port=8080 --use_pc
 ```
 HTTPS
 ```sh
-sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostname=1.2.3.4 --prism_username=PC_USERNAME --prism_password=PC_PASSWORD --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem --bind_port=443 --use_pc
+sudo env VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv /opt/prism-vnc-proxy/.venv/bin/python3 /opt/prism-vnc-proxy/prism_vnc_proxy.py --prism_hostname=YOUR_PRISM_HOSTNAME --prism_username=YOUR_PRISM_USERNAME --prism_password=YOUR_PRISM_PASSWORD --bind_port=443 --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem --use_pc
 ```
 
 ### Command-line Options
@@ -61,21 +61,20 @@ After=network.target
 Type=simple
 User=nutanix
 WorkingDirectory=/opt/prism-vnc-proxy
-#ExecStart=/bin/bash -c 'source /opt/prism-vnc-proxy/.venv/bin/activate && python3 /opt/prism-vnc-proxy/prism_vnc_proxy.py
-#Restart=always
-#Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
-  --prism_hostname=1.2.3.4 \
-  --prism_username=PutTheUsernameHere \
-  --prism_password=PutThePasswordHere \
+  --prism_hostname=YOUR_PRISM_HOSTNAME \
+  --prism_username=YOUR_PRISM_USERNAME \
+  --prism_password=YOUR_PRISM_PASSWORD \
   --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem \
   --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem \
   --bind_port=443 \
   --use_pc
 Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
-Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Restart=always
 User=root
+# Root is required to bind to privileged port 443
+# Remove ssl_cert & ssl_key for http & change bind_port
+# Remove use_pc for Prism Element
 
 [Install]
 WantedBy=multi-user.target
