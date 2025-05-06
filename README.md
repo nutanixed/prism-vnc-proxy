@@ -48,31 +48,32 @@ sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostna
 - `--prism_username`: Username for the Prism gateway (default: "admin").
 - `--prism_password`: Password for the Prism gateway.
 
-###
-- `vncproxy.service (/etc/systemd/system/vncproxy.service)
-- [Unit]
-- Description=Prism VNC Proxy
-- After=network.target
-- 
-- [Service]
-- Type=simple
-- User=nutanix
-- WorkingDirectory=/opt/prism-vnc-proxy
-- ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
--   --prism_hostname=1.2.3.4.5 \
--   --prism_username=PC_USERNAME
--   --prism_password=PC_PASSWORD \
--   --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem \
--   --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem \
--   --bind_port=443 \
--   --use_pc
-- Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
-- Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-- Restart=always
-- User=root
-- 
-- [Install]
-- WantedBy=multi-user.target
+### VNC Proxy Servce
+(/etc/systemd/system/vncproxy.service)
+
+[Unit]
+Description=Prism VNC Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=nutanix
+WorkingDirectory=/opt/prism-vnc-proxy
+ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
+    --prism_hostname=1.2.3.4.5 \
+    --prism_username=PC_USERNAME
+    --prism_password=PC_PASSWORD \
+    --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem \
+    --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem \
+    --bind_port=443 \
+    --use_pc
+Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
+Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
 
 ### Endpoints
 - `/proxy/$vm_uuid`: Proxies WebSocket traffic to the VNC server for the specified VM UUID.
