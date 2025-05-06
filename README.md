@@ -52,6 +52,7 @@ sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostna
 (/etc/systemd/system/vncproxy.service)
 
 [Unit]
+```sh
 Description=Prism VNC Proxy
 After=network.target
 
