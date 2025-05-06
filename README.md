@@ -51,6 +51,7 @@ sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostna
 ### VNC Proxy Servce
 (/etc/systemd/system/vncproxy.service)
 ```sh
+
 [Unit]
 Description=Prism VNC Proxy
 After=network.target
@@ -59,14 +60,16 @@ After=network.target
 Type=simple
 User=nutanix
 WorkingDirectory=/opt/prism-vnc-proxy
+#ExecStart=/bin/bash -c 'source /opt/prism-vnc-proxy/.venv/bin/activate && python3 /opt/prism-vnc-proxy/prism_vnc_proxy.py
+#Restart=always
+#Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
-    --prism_hostname=1.2.3.4.5 \
-    --prism_username=PC_USERNAME
-    --prism_password=PC_PASSWORD \
-    --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem \
-    --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem \
-    --bind_port=443 \
-    --use_pc
+  --prism_hostname=10.142.151.33 \
+  --prism_password=Nutanix/4u! \
+  --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem \
+  --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem \
+  --bind_port=443 \
+  --use_pc
 Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
 Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Restart=always
