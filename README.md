@@ -49,7 +49,8 @@ sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostna
 - `--prism_password`: Password for the Prism gateway.
 
 ### VNC Proxy Servce
-(/etc/systemd/system/vncproxy.service)
+/etc/systemd/system/vncproxy.service
+
 ```sh
 
 [Unit]
