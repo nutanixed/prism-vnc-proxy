@@ -64,8 +64,9 @@ WorkingDirectory=/opt/prism-vnc-proxy
 #Restart=always
 #Environment=PATH=/opt/prism-vnc-proxy/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
-  --prism_hostname=10.142.151.33 \
-  --prism_password=Nutanix/4u! \
+  --prism_hostname=1.2.3.4 \
+  --prism_username=PutTheUsernameHere \
+  --prism_password=PutThePasswordHere \
   --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem \
   --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem \
   --bind_port=443 \
