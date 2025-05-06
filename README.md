@@ -35,10 +35,10 @@ The proxy can be run from Python like so:
 
 HTTP
 python3 /opt/prism-vnc-proxy/prism_vnc_proxy.py --prism_hostname=1.2.3.4 --prism_username=PC_USERNAME --prism_password=PC_PASSWORD --bind_port=8080 --use_pc'
-
+```
+```sh
 HTTPS
 sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostname=1.2.3.4 --prism_username=PC_USERNAME --prism_password=PC_PASSWORD --ssl_cert=/opt/prism-vnc-proxy/certs/fullchain.pem --ssl_key=/opt/prism-vnc-proxy/certs/privkey.pem --bind_port=443 --use_pc
-
 ```
 
 ### Command-line Options
