@@ -50,9 +50,8 @@ sudo -E /opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py --prism_hostna
 
 ### VNC Proxy Servce
 (/etc/systemd/system/vncproxy.service)
-
-[Unit]
 ```sh
+[Unit]
 Description=Prism VNC Proxy
 After=network.target
 
@@ -75,6 +74,8 @@ User=root
 
 [Install]
 WantedBy=multi-user.target
+
+```
 
 ### Endpoints
 - `/proxy/$vm_uuid`: Proxies WebSocket traffic to the VNC server for the specified VM UUID.
