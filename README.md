@@ -164,6 +164,8 @@ EnvironmentFile=/opt/prism-vnc-proxy/.env
 Restart=always
 User=root
 # Root is required to bind to privileged port 443
+# Remove ssl_cert & ssl_key for http & change bind_port
+# Remove use_pc for Prism Element
 
 [Install]
 WantedBy=multi-user.target
