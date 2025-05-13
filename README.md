@@ -40,14 +40,14 @@ The project supports using a `.env` file for configuration. This is the recommen
 2. Edit the `.env` file with your specific configuration:
    ```sh
    # Prism VNC Proxy Configuration
-   PRISM_HOSTNAME=your.prism.hostname.or.ip
-   PRISM_USERNAME=admin
+   PRISM_HOSTNAME=your_prism_hostname_or_ip
+   PRISM_USERNAME=your_admin_username
    PRISM_PASSWORD=your_secure_password
-   BIND_PORT=443
+   BIND_PORT=your_bind_port # Default: 8080
 
    # SSL Configuration
-   SSL_CERT=/opt/prism-vnc-proxy/certs/fullchain.pem
-   SSL_KEY=/opt/prism-vnc-proxy/certs/privkey.pem
+   SSL_CERT=path_to_your_ssl_cert # fullchain.pem
+   SSL_KEY=path_to_your_ssl_key # privkey.pem
    ```
 
 3. Secure your `.env` file with appropriate permissions:
