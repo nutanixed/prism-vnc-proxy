@@ -57,34 +57,6 @@ The project supports using a `.env` file for configuration. This is the recommen
 
 > **Note**: The `.env` file contains sensitive information and is excluded from version control via `.gitignore`. Never commit your actual `.env` file to the repository.
 
-### Environment Configuration
-The project supports using a `.env` file for configuration. This is the recommended approach for managing sensitive credentials and configuration settings.
-
-1. Copy the example environment file to create your own configuration:
-   ```sh
-   cp .env.example .env
-   ```
-
-2. Edit the `.env` file with your specific configuration:
-   ```sh
-   # Prism VNC Proxy Configuration
-   PRISM_HOSTNAME=your.prism.hostname.or.ip
-   PRISM_USERNAME=admin
-   PRISM_PASSWORD=your_secure_password
-   BIND_PORT=443
-
-   # SSL Configuration
-   SSL_CERT=/opt/prism-vnc-proxy/certs/fullchain.pem
-   SSL_KEY=/opt/prism-vnc-proxy/certs/privkey.pem
-   ```
-
-3. Secure your `.env` file with appropriate permissions:
-   ```sh
-   chmod 600 .env
-   ```
-
-> **Note**: The `.env` file contains sensitive information and is excluded from version control via `.gitignore`. Never commit your actual `.env` file to the repository.
-
 ### Run the Proxy
 The proxy can be run from Python like so:
 
@@ -275,26 +247,7 @@ If you encounter issues while running the proxy, consider the following steps:
 
 6. **Dependencies**: 
    - Ensure all required Python packages are installed and up-to-date
-   - Verify virtual environment is activated when installing or running
-[Service]
-Type=simple
-WorkingDirectory=/opt/prism-vnc-proxy
-ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
-  --prism_hostname=${PRISM_HOSTNAME} \
-  --prism_username=${PRISM_USERNAME} \
-  --prism_password=${PRISM_PASSWORD} \
-  --ssl_cert=${SSL_CERT} \
-  --ssl_key=${SSL_KEY} \
-  --bind_port=${BIND_PORT} \
-  --use_pc
-Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
-EnvironmentFile=/opt/prism-vnc-proxy/.env
-Restart=always
-User=root
-# Root is required to bind to privileged port 443
 
-[Install]
-WantedBy=multi-user.target
 ```
 
 > **Note**: Make sure the `.env` file has restricted permissions (chmod 600) and is owned by the appropriate user.
