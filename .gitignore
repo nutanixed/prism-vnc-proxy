@@ -164,3 +164,6 @@ cython_debug/
 # SSL certificates
 fullchain.pem
 privkey.pem
+
+# VSCode settings
+.vscode/
