@@ -147,16 +147,6 @@ For better security and easier configuration management, you can modify the serv
 [Unit]
 Description=Prism VNC Proxy
 After=network.target
-```
-
-#### Option 2: Using Environment File (Recommended)
-
-For better security and easier configuration management, you can modify the service to use the `.env` file:
-
-```sh
-[Unit]
-Description=Prism VNC Proxy
-After=network.target
 
 [Service]
 Type=simple
