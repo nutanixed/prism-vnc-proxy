@@ -29,8 +29,66 @@ python3 -m pip install -r requirements.txt
 
 ## Usage
 
+### Environment Configuration
+The project supports using a `.env` file for configuration. This is the recommended approach for managing sensitive credentials and configuration settings.
+
+1. Copy the example environment file to create your own configuration:
+   ```sh
+   cp .env.example .env
+   ```
+
+2. Edit the `.env` file with your specific configuration:
+   ```sh
+   # Prism VNC Proxy Configuration
+   PRISM_HOSTNAME=your.prism.hostname.or.ip
+   PRISM_USERNAME=admin
+   PRISM_PASSWORD=your_secure_password
+   BIND_PORT=443
+
+   # SSL Configuration
+   SSL_CERT=/opt/prism-vnc-proxy/certs/fullchain.pem
+   SSL_KEY=/opt/prism-vnc-proxy/certs/privkey.pem
+   ```
+
+3. Secure your `.env` file with appropriate permissions:
+   ```sh
+   chmod 600 .env
+   ```
+
+> **Note**: The `.env` file contains sensitive information and is excluded from version control via `.gitignore`. Never commit your actual `.env` file to the repository.
+
+### Environment Configuration
+The project supports using a `.env` file for configuration. This is the recommended approach for managing sensitive credentials and configuration settings.
+
+1. Copy the example environment file to create your own configuration:
+   ```sh
+   cp .env.example .env
+   ```
+
+2. Edit the `.env` file with your specific configuration:
+   ```sh
+   # Prism VNC Proxy Configuration
+   PRISM_HOSTNAME=your.prism.hostname.or.ip
+   PRISM_USERNAME=admin
+   PRISM_PASSWORD=your_secure_password
+   BIND_PORT=443
+
+   # SSL Configuration
+   SSL_CERT=/opt/prism-vnc-proxy/certs/fullchain.pem
+   SSL_KEY=/opt/prism-vnc-proxy/certs/privkey.pem
+   ```
+
+3. Secure your `.env` file with appropriate permissions:
+   ```sh
+   chmod 600 .env
+   ```
+
+> **Note**: The `.env` file contains sensitive information and is excluded from version control via `.gitignore`. Never commit your actual `.env` file to the repository.
+
 ### Run the Proxy
 The proxy can be run from Python like so:
+
+#### Using Command Line Arguments
 
 HTTP
 ```sh
@@ -48,11 +106,12 @@ sudo env VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv /opt/prism-vnc-proxy/.venv/bin/p
 - `--prism_username`: Username for the Prism gateway (default: "admin").
 - `--prism_password`: Password for the Prism gateway.
 
-### VNC Proxy Servce
+### VNC Proxy Service
 /etc/systemd/system/vncproxy.service
 
-```sh
+#### Option 1: Using Command Line Arguments
 
+```sh
 [Unit]
 Description=Prism VNC Proxy
 After=network.target
@@ -78,8 +137,49 @@ User=root
 
 [Install]
 WantedBy=multi-user.target
-
 ```
+
+#### Option 2: Using Environment File (Recommended)
+
+For better security and easier configuration management, you can modify the service to use the `.env` file:
+
+```sh
+[Unit]
+Description=Prism VNC Proxy
+After=network.target
+```
+
+#### Option 2: Using Environment File (Recommended)
+
+For better security and easier configuration management, you can modify the service to use the `.env` file:
+
+```sh
+[Unit]
+Description=Prism VNC Proxy
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/prism-vnc-proxy
+ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
+  --prism_hostname=${PRISM_HOSTNAME} \
+  --prism_username=${PRISM_USERNAME} \
+  --prism_password=${PRISM_PASSWORD} \
+  --ssl_cert=${SSL_CERT} \
+  --ssl_key=${SSL_KEY} \
+  --bind_port=${BIND_PORT} \
+  --use_pc
+Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
+EnvironmentFile=/opt/prism-vnc-proxy/.env
+Restart=always
+User=root
+# Root is required to bind to privileged port 443
+
+[Install]
+WantedBy=multi-user.target
+```
+
+> **Note**: Make sure the `.env` file has restricted permissions (chmod 600) and is owned by the appropriate user.
 
 ### Endpoints
 - `/proxy/$vm_uuid`: Proxies WebSocket traffic to the VNC server for the specified VM UUID.
@@ -103,6 +203,139 @@ http://<proxy-host>:<bind_port>/console/vnc_auto.html?path=proxy/<vm_uuid>&name=
 ```
 
 ## Development
+
+### Environment Variables and Security Notes
+
+#### Using Environment Variables with systemd
+When using the systemd service with the EnvironmentFile directive, the environment variables from the `.env` file will be automatically available to your application through the systemd service.
+
+The systemd service will read the variables from the `.env` file and pass them to your application as environment variables, which can then be accessed in the command line arguments of your application.
+
+This approach doesn't require any code changes to your Python application, as it continues to use command-line arguments.
+
+#### Security Best Practices for .env Files
+
+1. **File Permissions**:
+   - Always set restrictive permissions on your .env file: `chmod 600 .env`
+   - This ensures only the file owner can read or write to it
+
+2. **Ownership**:
+   - When running as a service, ensure the .env file is owned by the appropriate user:
+     ```sh
+     sudo chown root:root .env  # If running service as root
+     # OR
+     sudo chown nutanix:nutanix .env  # If running service as nutanix
+     ```
+
+3. **Credential Management**:
+   - Regularly rotate passwords and update the .env file
+   - Use strong, unique passwords for Prism credentials
+   - Consider using a secrets management solution for production environments
+
+4. **Backup Considerations**:
+   - If backing up the .env file, ensure backups are also secured
+   - Consider encrypting backups that contain the .env file
+
+5. **Deployment**:
+   - Never commit the actual .env file to version control
+   - Use the provided .env.example as a template
+   - Document the process for securely transferring the .env file to new deployments
+
+6. **Monitoring**:
+   - Regularly audit who has access to the .env file
+   - Consider logging access attempts to the directory containing sensitive files
+
+### Logging
+Logs information and errors to the console using the `logging` module.
+
+### Troubleshooting
+If you encounter issues while running the proxy, consider the following steps:
+
+1. **Check Logs**: 
+   - Review the console logs for any error messages or warnings
+   - For systemd services, use `journalctl -u vncproxy.service`
+
+2. **Validate Configuration**: 
+   - Ensure that the command-line options are correctly specified
+   - Verify the .env file contains all required variables
+   - Check for typos or formatting issues in the .env file
+
+3. **Environment Variable Issues**:
+   - Verify the systemd service can access the .env file:
+     ```sh
+     sudo systemctl show vncproxy.service -p EnvironmentFile
+     ```
+   - Test environment variable expansion:
+     ```sh
+     sudo systemctl show vncproxy.service -p Environment
+     ```
+   - Check file permissions and ownership of the .env file
+
+4. **Network Issues**: 
+   - Verify network connectivity between the proxy server and the Prism gateway
+   - Test basic connectivity: `ping <PRISM_HOSTNAME>`
+   - Test port connectivity: `nc -zv <PRISM_HOSTNAME> 443`
+
+5. **SSL Certificate Issues**:
+   - Verify SSL certificate and key paths are correct
+   - Check certificate validity: `openssl x509 -in <SSL_CERT> -text -noout`
+   - Ensure certificate and key match: `diff <(openssl x509 -in <SSL_CERT> -pubkey -noout) <(openssl pkey -in <SSL_KEY> -pubout)`
+
+6. **Dependencies**: 
+   - Ensure all required Python packages are installed and up-to-date
+   - Verify virtual environment is activated when installing or running
+[Service]
+Type=simple
+WorkingDirectory=/opt/prism-vnc-proxy
+ExecStart=/opt/prism-vnc-proxy/.venv/bin/python3 prism_vnc_proxy.py \
+  --prism_hostname=${PRISM_HOSTNAME} \
+  --prism_username=${PRISM_USERNAME} \
+  --prism_password=${PRISM_PASSWORD} \
+  --ssl_cert=${SSL_CERT} \
+  --ssl_key=${SSL_KEY} \
+  --bind_port=${BIND_PORT} \
+  --use_pc
+Environment=VIRTUAL_ENV=/opt/prism-vnc-proxy/.venv
+EnvironmentFile=/opt/prism-vnc-proxy/.env
+Restart=always
+User=root
+# Root is required to bind to privileged port 443
+
+[Install]
+WantedBy=multi-user.target
+```
+
+> **Note**: Make sure the `.env` file has restricted permissions (chmod 600) and is owned by the appropriate user.
+
+### Endpoints
+- `/proxy/$vm_uuid`: Proxies WebSocket traffic to the VNC server for the specified VM UUID.
+- `/console/vnc_auto.html?path=proxy/$vm_uuid&name=$name`: Provides a frontend UI for the VNC WebSocket.
+
+## Validate Proxy is Running
+You can check if the proxy is running (crudely) with `netstat` like so:
+```sh
+sudo netstat -an | grep <bind_port>
+```
+Example:
+```sh
+$ sudo netstat -an | grep 8080
+tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN
+```
+
+### Access Resources
+Access the VNC UI via the following URL scheme:
+```
+http://<proxy-host>:<bind_port>/console/vnc_auto.html?path=proxy/<vm_uuid>&name=<vm_name>
+```
+
+## Development
+
+### Using Environment Variables with systemd
+When using the systemd service with the EnvironmentFile directive, the environment variables from the `.env` file will be automatically available to your application through the systemd service.
+
+The systemd service will read the variables from the `.env` file and pass them to your application as environment variables, which can then be accessed in the command line arguments of your application.
+
+This approach doesn't require any code changes to your Python application, as it continues to use command-line arguments.
 
 ### Logging
 Logs information and errors to the console using the `logging` module.
