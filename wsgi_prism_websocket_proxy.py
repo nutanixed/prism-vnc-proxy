@@ -114,57 +114,85 @@ class WSGIPrismWebsocketProxy:
 
         client_ws = web.WebSocketResponse(protocols=('binary',))
         await client_ws.prepare(request)
+        
+        # Track the websocket in the application
+        request.app.setdefault('websockets', set()).add(client_ws)
+        
+        # Make sure we remove the websocket when it's closed
+        try:
+            if self._use_prism_central:
+                cookie, cluster_uuid = self._get_pc_session_cookie_and_cluster(vm_uuid)
+            else:
+                cookie = self._get_session_cookie()
+                cluster_uuid = None
 
-        if self._use_prism_central:
-            cookie, cluster_uuid = self._get_pc_session_cookie_and_cluster(vm_uuid)
-        else:
-            cookie = self._get_session_cookie()
-            cluster_uuid = None
-
-        if not cookie:
-            log.error("Authentication failed, closing client WebSocket")
-            await client_ws.close()
-            return client_ws
-
-        vnc_path = f"/vnc/vm/{vm_uuid}/proxy"
-        if cluster_uuid:
-            vnc_path += f"?proxyClusterUuid={cluster_uuid}"
-        uri = f"wss://{self._host}:9440{vnc_path}"
-
-        log.info("Connecting to backend WebSocket: %s", uri)
-
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        headers = {'Cookie': cookie}
-
-        connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            try:
-                server_ws = await session.ws_connect(
-                    uri,
-                    headers=headers,
-                    protocols=('binary',)
-                )
-            except Exception as e:
-                log.error("Backend WebSocket connection failed: %s", e)
+            if not cookie:
+                log.error("Authentication failed, closing client WebSocket")
                 await client_ws.close()
                 return client_ws
 
-            async def _proxy(src: web.WebSocketResponse, dst: web.WebSocketResponse):
-                async for msg in src:
-                    if msg.type == aiohttp.WSMsgType.TEXT:
-                        await dst.send_str(msg.data)
-                    elif msg.type == aiohttp.WSMsgType.BINARY:
-                        await dst.send_bytes(msg.data)
-                    elif msg.type == aiohttp.WSMsgType.CLOSE:
-                        await dst.close()
-                        break
+            vnc_path = f"/vnc/vm/{vm_uuid}/proxy"
+            if cluster_uuid:
+                vnc_path += f"?proxyClusterUuid={cluster_uuid}"
+            uri = f"wss://{self._host}:9440{vnc_path}"
 
-            await asyncio.gather(
-                _proxy(client_ws, server_ws),
-                _proxy(server_ws, client_ws)
-            )
+            log.info("Connecting to backend WebSocket: %s", uri)
 
-        log.info("WebSocket proxy closed for VM UUID: %s", vm_uuid)
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            headers = {'Cookie': cookie}
+
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                try:
+                    server_ws = await session.ws_connect(
+                        uri,
+                        headers=headers,
+                        protocols=('binary',)
+                    )
+                except Exception as e:
+                    log.error("Backend WebSocket connection failed: %s", e)
+                    await client_ws.close()
+                    return client_ws
+
+                async def _proxy(src: web.WebSocketResponse, dst: web.WebSocketResponse):
+                    try:
+                        async for msg in src:
+                            if msg.type == aiohttp.WSMsgType.TEXT:
+                                await dst.send_str(msg.data)
+                            elif msg.type == aiohttp.WSMsgType.BINARY:
+                                await dst.send_bytes(msg.data)
+                            elif msg.type == aiohttp.WSMsgType.CLOSE:
+                                await dst.close()
+                                break
+                    except Exception as e:
+                        log.error("Error in proxy: %s", e)
+                        if not dst.closed:
+                            await dst.close()
+
+                try:
+                    await asyncio.gather(
+                        _proxy(client_ws, server_ws),
+                        _proxy(server_ws, client_ws)
+                    )
+                except asyncio.CancelledError:
+                    log.info("WebSocket proxy task cancelled for VM UUID: %s", vm_uuid)
+                    if not server_ws.closed:
+                        await server_ws.close()
+                    if not client_ws.closed:
+                        await client_ws.close()
+                except Exception as e:
+                    log.error("Error in WebSocket proxy: %s", e)
+                    if not server_ws.closed:
+                        await server_ws.close()
+                    if not client_ws.closed:
+                        await client_ws.close()
+
+            log.info("WebSocket proxy closed for VM UUID: %s", vm_uuid)
+        finally:
+            # Always remove the websocket from tracking when done
+            if client_ws in request.app.get('websockets', set()):
+                request.app['websockets'].remove(client_ws)
+                
         return client_ws

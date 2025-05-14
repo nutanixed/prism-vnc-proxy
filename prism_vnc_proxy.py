@@ -7,9 +7,11 @@ HTTPS frontend for the VNC proxy with optional SSL support.
 """
 
 import argparse
+import asyncio
 import inspect
 import logging
 import os
+import signal
 import ssl
 import sys
 
@@ -78,6 +80,29 @@ def main() -> int:
         create_ssl_context(args.ssl_cert, args.ssl_key)
         if args.ssl_cert and args.ssl_key else None
     )
+
+    # Set up signal handlers for graceful shutdown
+    async def shutdown(app):
+        log.info("Received shutdown signal, closing all connections...")
+        for ws in list(app.get('websockets', set())):
+            await ws.close(code=1001, message=b'Server shutdown')
+        log.info("All connections closed")
+
+    async def on_shutdown(app):
+        log.info("Shutting down server...")
+
+    app.on_shutdown.append(on_shutdown)
+    
+    # Store active websockets
+    app['websockets'] = set()
+
+    # Set up signal handlers
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(
+            sig,
+            lambda sig=sig: asyncio.create_task(shutdown(app))
+        )
 
     bind_host = args.bind_address or "0.0.0.0"
     log.info("Starting aiohttp server on %s:%d", bind_host, args.bind_port)
