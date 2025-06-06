@@ -75,6 +75,11 @@ def main() -> int:
     app = web.Application()
     app.router.add_get("/console/{file_path:.*}", wsgi_file_handler)
     app.router.add_get("/proxy/{vm_uuid}", proxy.prism_websocket_handler)
+    # Add API routes for VM details (supporting both v1 and v3 API paths)
+    app.router.add_get("/api/nutanix/v3/vms/{vm_uuid}", proxy.vm_details_handler)
+    app.router.add_get("/PrismGateway/services/rest/v1/vms/{vm_uuid}", proxy.vm_details_handler)
+    # Add custom API route for VM details
+    app.router.add_get("/api/vm/{vm_uuid}/details", proxy.vm_details_handler)
 
     ssl_context = (
         create_ssl_context(args.ssl_cert, args.ssl_key)
