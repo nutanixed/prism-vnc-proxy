@@ -98,7 +98,20 @@
 
     // Gets the VM ID by parsing the URL
     getVmId: function () {
-      return this.getUrlParameter('uuid');
+      // First try to get from 'uuid' parameter (legacy)
+      var uuid = this.getUrlParameter('uuid');
+      if (uuid) {
+        return uuid;
+      }
+      
+      // If no uuid parameter, try to extract from 'path' parameter
+      var path = this.getUrlParameter('path');
+      if (path && path.startsWith('proxy/')) {
+        // Extract VM ID from path like "proxy/d859d796-8dde-4b41-a2b5-65c30d449d4e"
+        return path.substring(6); // Remove "proxy/" prefix
+      }
+      
+      return null;
     },
 
     // Gets the previously saved keyboard layout (if any) from local storage
@@ -354,7 +367,21 @@
 
     // Gets the VM details from the REST API.
     getVmDetails: function (vmId, success, error, noV1Access) {
-      this.getVm(vmId, noV1Access ? 'v3' : 'v1').done(success).fail(error);
+      // Try our custom API endpoint first for VM details
+      var customUrl = '/api/vm/' + vmId + '/details';
+      
+      $.ajax({
+        url: customUrl,
+        method: 'GET',
+        timeout: 5000,
+        success: function(customRes) {
+          success(customRes);
+        },
+        error: function(xhr, status, errorThrown) {
+          // If custom API fails, fall back to original Nutanix API
+          this.getVm(vmId, noV1Access ? 'v3' : 'v1').done(success).fail(error);
+        }.bind(this)
+      });
     },
 
     // Simple poller used to wait for task completion.
@@ -585,37 +612,38 @@
 
     var options = this.getQueryParamOptions();
     options.internalMode = true;
-    if ((options.hypervisorType && options.vmName &&
-         options.controllerVm) || options.internalMode) {
-      this.startConsoleSession(options);
-    } else {
-      DataManager.getVmDetails(vmId, function(res) {
-        // Since we cannot use the v2 APIs for CVMs, features depending on this
-        // must be disabled. If we're unable to determine it's a CVM assume it
-        // is for safety.
-        var isCvm = res.controllerVm || !res.hasOwnProperty('controllerVm');
-        if (isCvm) {
+    
+    // Always try to fetch VM details to get the VM name, even in internal mode
+    DataManager.getVmDetails(vmId, function(res) {
+      // Since we cannot use the v2 APIs for CVMs, features depending on this
+      // must be disabled. If we're unable to determine it's a CVM assume it
+      // is for safety.
+      var isCvm = res.controllerVm || !res.hasOwnProperty('controllerVm');
+      if (isCvm) {
+        _this.disabledFeats.push(Constants.FEAT.MOUNT_ISO);
+        _this.startConsoleSession(res);
+        return;
+      }
+
+      // Attempt to fetch the vm disk information required for the mount
+      // iso feature.
+      DataManager.getVm(vmId, 'v2', { include_vm_disk_config: true })
+        .then(function(v2res) {
+          _this.vm = VmModel(v2res);
+          _this.startConsoleSession(res);
+        })
+        .fail(function() {
+          // If the v2 vm fetch failed for some reason then just disable the
+          // mount iso feature and proceed.
           _this.disabledFeats.push(Constants.FEAT.MOUNT_ISO);
           _this.startConsoleSession(res);
-          return;
-        }
+        });
 
-        // Attempt to fetch the vm disk information required for the mount
-        // iso feature.
-        DataManager.getVm(vmId, 'v2', { include_vm_disk_config: true })
-          .then(function(v2res) {
-            _this.vm = VmModel(v2res);
-            _this.startConsoleSession(res);
-          })
-          .fail(function() {
-            // If the v2 vm fetch failed for some reason then just disable the
-            // mount iso feature and proceed.
-            _this.disabledFeats.push(Constants.FEAT.MOUNT_ISO);
-            _this.startConsoleSession(res);
-          });
-
-      }, onError, this.noV1Access);
-    }
+    }, function(error) {
+      // If VM details fetch fails, fall back to using options without VM name
+      console.warn('Failed to fetch VM details, proceeding without VM name:', error);
+      _this.startConsoleSession(options);
+    }, this.noV1Access);
   };
 
   // Starts the VM console session
@@ -624,9 +652,18 @@
                                                           jqXHR) {
     this.hypervisorType = response.hypervisorType;
 
+    // Extract VM name from response (supports both v1 and v3 API formats)
     if (this.noV1Access && this.useV3) {
       this.vmName = response && response.status && response.status.name;
     } else {
+      this.vmName = response.vmName;
+    }
+    
+    // Fallback: try both formats to ensure we get the VM name
+    if (!this.vmName && response.status && response.status.name) {
+      this.vmName = response.status.name;
+    }
+    if (!this.vmName && response.vmName) {
       this.vmName = response.vmName;
     }
 
@@ -756,7 +793,7 @@
       $('#vm_screenshot').on('click', this.vmScreenshot.bind(this));
 
       this.showVmNameInStatus();
-      global.document.title = unescape(this.vmName);
+      global.document.title = this.vmName ? unescape(this.vmName) : 'Console';
     }
   };
 

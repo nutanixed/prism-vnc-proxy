@@ -101,6 +101,84 @@ class WSGIPrismWebsocketProxy:
             log.error("Failed to fetch VM cluster UUID: %s", e)
             return None, None
 
+    def _get_vm_details(self, vm_uuid: str) -> Optional[dict]:
+        """Fetch VM details from Prism API."""
+        log.info("Fetching VM details for UUID: %s", vm_uuid)
+        session = requests.Session()
+        session.verify = False
+        
+        try:
+            if self._use_prism_central:
+                # For Prism Central, authenticate first
+                clusters_resp = session.post(
+                    f"https://{self._host}:9440/api/nutanix/v3/clusters/list",
+                    auth=(self._user, self._password),
+                    json={},
+                    headers={"Content-Type": "application/json"},
+                    timeout=10
+                )
+                clusters_resp.raise_for_status()
+                
+                # Fetch VM details using v3 API
+                vm_url = f"https://{self._host}:9440/api/nutanix/v3/vms/{vm_uuid}"
+                vm_resp = session.get(vm_url, headers={"Content-Type": "application/json"}, timeout=5)
+                vm_resp.raise_for_status()
+                vm_data = vm_resp.json()
+                
+                # Return data in format expected by frontend
+                return {
+                    "status": {
+                        "name": vm_data.get("status", {}).get("name", "Unknown VM"),
+                        "state": vm_data.get("status", {}).get("state", "UNKNOWN")
+                    },
+                    "hypervisorType": "kKvm",  # Default for AHV
+                    "controllerVm": False
+                }
+            else:
+                # For Prism Element, use v1 API
+                vm_url = f"https://{self._host}:9440/PrismGateway/services/rest/v1/vms/{vm_uuid}"
+                vm_resp = session.get(
+                    vm_url,
+                    auth=(self._user, self._password),
+                    headers={"Content-Type": "application/json"},
+                    timeout=5
+                )
+                vm_resp.raise_for_status()
+                vm_data = vm_resp.json()
+                
+                # Return data in format expected by frontend
+                return {
+                    "vmName": vm_data.get("vmName", "Unknown VM"),
+                    "powerState": vm_data.get("powerState", "UNKNOWN"),
+                    "hypervisorType": vm_data.get("hypervisorType", "kKvm"),
+                    "controllerVm": vm_data.get("controllerVm", False)
+                }
+                
+        except requests.RequestException as e:
+            log.error("Failed to fetch VM details: %s", e)
+            return None
+        except Exception as e:
+            log.error("Unexpected error fetching VM details: %s", e)
+            return None
+
+    async def vm_details_handler(self, request: web.Request) -> web.Response:
+        """Handle HTTP requests for VM details."""
+        vm_uuid = request.match_info.get('vm_uuid')
+        try:
+            uuid_lib.UUID(vm_uuid, version=4)
+        except ValueError:
+            log.error("Invalid VM UUID: %s", vm_uuid)
+            return web.Response(status=400, text="Invalid VM UUID")
+
+        log.info("Received VM details request for UUID: %s", vm_uuid)
+        
+        vm_details = self._get_vm_details(vm_uuid)
+        if vm_details is None:
+            log.error("Failed to fetch VM details for UUID: %s", vm_uuid)
+            return web.Response(status=500, text="Failed to fetch VM details")
+        
+        return web.json_response(vm_details)
+
     async def prism_websocket_handler(self, request: web.Request) -> web.WebSocketResponse:
         """Handle incoming WebSocket requests and proxy them to Prism."""
         vm_uuid = request.match_info.get('vm_uuid')
