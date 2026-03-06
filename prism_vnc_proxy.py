@@ -15,6 +15,7 @@ import signal
 import ssl
 import sys
 
+import aiohttp
 from aiohttp import web
 
 from wsgi_file_handler import wsgi_file_handler
@@ -54,12 +55,28 @@ def create_ssl_context(cert_path: str, key_path: str) -> ssl.SSLContext:
     return context
 
 
+async def on_shutdown(app):
+    log.info("Shutting down server...")
+    websockets = app.get('websockets', set())
+    if websockets:
+        log.info("Closing %d active WebSocket connections...", len(websockets))
+        # Create a list to avoid "set size changed during iteration"
+        ws_list = list(websockets)
+        for ws in ws_list:
+            await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message=b'Server shutdown')
+    log.info("Shutdown complete.")
+
+
 def main() -> int:
     args = parse_args()
 
     # Verify runtime environment
-    assert sys.version_info[:2] >= (3, 9), "Requires Python 3.9+"
-    assert "VIRTUAL_ENV" in os.environ, "Activate your virtualenv"
+    if sys.version_info[:2] < (3, 9):
+        log.error("Requires Python 3.9+")
+        return 1
+    
+    if "VIRTUAL_ENV" not in os.environ:
+        log.warning("VIRTUAL_ENV not found in environment. Ensure you are running in a virtualenv.")
 
     log.info("Starting Python %s", sys.version.split()[0])
 
@@ -73,46 +90,32 @@ def main() -> int:
 
     # Set up the aiohttp app and routes
     app = web.Application()
+    app['websockets'] = set()
+    
     app.router.add_get("/console/{file_path:.*}", wsgi_file_handler)
     app.router.add_get("/proxy/{vm_uuid}", proxy.prism_websocket_handler)
-    # Add API routes for VM details (supporting both v1 and v3 API paths)
+    # Add API routes for VM details
     app.router.add_get("/api/nutanix/v3/vms/{vm_uuid}", proxy.vm_details_handler)
     app.router.add_get("/PrismGateway/services/rest/v1/vms/{vm_uuid}", proxy.vm_details_handler)
-    # Add custom API route for VM details
+    app.router.add_get("/PrismGateway/services/rest/v2.0/vms/{vm_uuid}", proxy.vm_details_handler)
     app.router.add_get("/api/vm/{vm_uuid}/details", proxy.vm_details_handler)
+
+    app.on_shutdown.append(on_shutdown)
 
     ssl_context = (
         create_ssl_context(args.ssl_cert, args.ssl_key)
         if args.ssl_cert and args.ssl_key else None
     )
 
-    # Set up signal handlers for graceful shutdown
-    async def shutdown(app):
-        log.info("Received shutdown signal, closing all connections...")
-        for ws in list(app.get('websockets', set())):
-            await ws.close(code=1001, message=b'Server shutdown')
-        log.info("All connections closed")
-
-    async def on_shutdown(app):
-        log.info("Shutting down server...")
-
-    app.on_shutdown.append(on_shutdown)
-    
-    # Store active websockets
-    app['websockets'] = set()
-
-    # Set up signal handlers
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(
-            sig,
-            lambda sig=sig: asyncio.create_task(shutdown(app))
-        )
-
     bind_host = args.bind_address or "0.0.0.0"
     log.info("Starting aiohttp server on %s:%d", bind_host, args.bind_port)
-    web.run_app(app, host=bind_host, port=args.bind_port, ssl_context=ssl_context)
-
+    
+    try:
+        web.run_app(app, host=bind_host, port=args.bind_port, ssl_context=ssl_context)
+    except Exception as e:
+        log.exception("Unexpected error in run_app: %s", e)
+        return 1
+    
     return 0
 
 

@@ -215,6 +215,7 @@ class WSGIPrismWebsocketProxy:
             uri = f"wss://{self._host}:9440{vnc_path}"
 
             log.info("Connecting to backend WebSocket: %s", uri)
+            log.info("Using cookies: %s", cookie)
 
             ssl_ctx = ssl.create_default_context()
             ssl_ctx.check_hostname = False
@@ -229,43 +230,57 @@ class WSGIPrismWebsocketProxy:
                         headers=headers,
                         protocols=('binary',)
                     )
+                    log.info("Backend WebSocket connected successfully")
                 except Exception as e:
                     log.error("Backend WebSocket connection failed: %s", e)
                     await client_ws.close()
                     return client_ws
 
-                async def _proxy(src: web.WebSocketResponse, dst: web.WebSocketResponse):
+                async def _proxy(src, dst, name: str):
+                    log.info(f"Starting proxy loop: {name}")
                     try:
                         async for msg in src:
+                            if dst.closed:
+                                log.info(f"Destination {name} closed, stopping proxy")
+                                break
                             if msg.type == aiohttp.WSMsgType.TEXT:
                                 await dst.send_str(msg.data)
                             elif msg.type == aiohttp.WSMsgType.BINARY:
                                 await dst.send_bytes(msg.data)
                             elif msg.type == aiohttp.WSMsgType.CLOSE:
+                                log.info(f"Source {name} sent CLOSE, closing destination")
                                 await dst.close()
                                 break
+                            elif msg.type == aiohttp.WSMsgType.ERROR:
+                                log.error(f"Source {name} WebSocket error: {src.exception()}")
+                                break
+                    except (ConnectionResetError, aiohttp.ClientError) as e:
+                        log.debug(f"Connection reset in {name} proxy: {e}")
                     except Exception as e:
-                        log.error("Error in proxy: %s", e)
+                        log.error("Error in %s proxy: %s", name, e)
+                    finally:
                         if not dst.closed:
-                            await dst.close()
+                            try:
+                                await dst.close()
+                            except Exception:
+                                pass
 
-                try:
-                    await asyncio.gather(
-                        _proxy(client_ws, server_ws),
-                        _proxy(server_ws, client_ws)
-                    )
-                except asyncio.CancelledError:
-                    log.info("WebSocket proxy task cancelled for VM UUID: %s", vm_uuid)
-                    if not server_ws.closed:
-                        await server_ws.close()
-                    if not client_ws.closed:
-                        await client_ws.close()
-                except Exception as e:
-                    log.error("Error in WebSocket proxy: %s", e)
-                    if not server_ws.closed:
-                        await server_ws.close()
-                    if not client_ws.closed:
-                        await client_ws.close()
+                # Use wait with return_when=FIRST_COMPLETED to handle one side closing
+                done, pending = await asyncio.wait(
+                    [
+                        asyncio.create_task(_proxy(client_ws, server_ws, "client->server")),
+                        asyncio.create_task(_proxy(server_ws, client_ws, "server->client"))
+                    ],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                # Cancel pending tasks
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
             log.info("WebSocket proxy closed for VM UUID: %s", vm_uuid)
         finally:
